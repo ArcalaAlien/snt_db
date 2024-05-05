@@ -1,4 +1,6 @@
 #include <sourcemod>
+#include <clients>
+#include <string>
 #include <dbi>
 #include <files>
 #include <keyvalues>
@@ -23,46 +25,89 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 
     return APLRes_Success;
 }
+
 /*
 TODO:
     Add a command to add a user to a group ("SUPPORTER","CONTRIBUTOR","DONATOR")
     Set up other config functions
     Make this a required plugin
     Create a function to pass through data values to other plugins
+    Add group verification function
+    
+    Event Module
+        Events admins can throw:
+            Double credits
+            Mini-contest?
+
+        Case (Holiday)
+            if holiday: birthday
+                use birthday_mapcycle.txt
+                2x credits
+                2x points?
+            if holiday: 420
+                use 420_mapcycle.txt
+            
+
+    Server items?
+        Micspam privileges
+        Colored names (expensive)
+        Colored chat (very expensive)
+    
+    Potential Micspam module?
+        Players buy micspam ability from store
+        While players have micspam ability equipped
+            Player's voicechat gets muted
+            Add player to bottom of micspam queue
+            Move player through queue as other players spam / leave / unequip
+            Player uses /start command to start spamming
+            30 seconds to start or else player gets bumped to back of queue
+            Player gets unmuted and has a 10 minute timer to play music.
+            Players can end at any time by using /end
+                Admins can end anyone's spam by using /end <name>
+            Once player is done spamming mute them again, bump up queue. 
 */
 
 public void OnPluginStart() 
 {
-    CheckForCorePackages();
+    // CheckForCorePackages();
 }
 
-void CheckForCorePackages()
+/*
+bool CheckForCorePackages()
 {
     if (!LibraryExists("sntdb_maps")) 
     {
         ThrowError("[SNT] stndb_maps.smx doesn't exist! Invalid install, aborting.");
+        return false;
     }
-    /*else if (!LibraryExists("sntdb_ranks"))
+    else if (!LibraryExists("sntdb_ranks"))
     {
         ThrowError("[SNT] stndb_ranks.smx doesn't exist! Invalid install, aborting.");
+        return false;
     }
     else if (!LibraryExists("sntdb_trails"))
     {
         ThrowError("[SNT] stndb_trails.smx doesn't exist! Invalid install, aborting.");
+        return false;
     }
     else if (!LibraryExists("sntdb_sound"))
     {
         ThrowError("[SNT] stndb_sound.smx doesn't exist! Invalid install, aborting.");
+        return false;
     }
     else if (!LibraryExists("sntdb_tags"))
     {
         ThrowError("[SNT] stndb_tags.smx doesn't exist! Invalid install, aborting.");
+        return false;
     }
     else if (!LibraryExists("sntdb_store"))
     {
         ThrowError("[SNT] stndb_tags.smx doesn't exist! Invalid install, aborting.");
-    }*/
+        return false;
+    }
+    return true;
 }
+*/
 
 int CreateMapSQLConfigs(Handle plugin, int numParams)
 {
