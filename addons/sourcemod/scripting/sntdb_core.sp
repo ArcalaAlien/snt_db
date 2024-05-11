@@ -17,10 +17,7 @@ public Plugin myinfo =
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
 {
 
-    CreateNative("LoadMapSQLConfigs", CreateMapSQLConfigs);
-    CreateNative("LoadRankSQLConfigs", CreateRankSQLConfigs);
-    CreateNative("LoadStoreSQLConfigs", CreateStoreSQLConfigs);
-    // CreateNative("ReturnSQLStatement",  SendSQLStatement);
+    CreateNative("LoadSQLConfigs", ReadSQLConfigs);
     RegPluginLibrary("sntdb_core");
 
     return APLRes_Success;
@@ -28,94 +25,144 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 
 /*
 TODO:
-    Add a command to add a user to a group ("SUPPORTER","CONTRIBUTOR","DONATOR")
-    Set up other config functions
-    Make this a required plugin
-    Create a function to pass through data values to other plugins
     Add group verification function
     
-    Event Module
+    Events:
+        /snt_events
         Events admins can throw:
             Double credits
-            Mini-contest?
+            1/2 Store Prices?
+            Mini-contest (Top 3 players): /snt_contest <timelimit in mins=5min> <award=1000> (min is 500)>
+                Announce contest (5 min time limit)
+                Set contest to true
+                3, 2, 1, GO!
+                Wait 5 mins
+                Set contest to false
+                SLCT * FRM snt_players ORDR BY Points DESC LMT 3;
+                First place gets (award)
+                Second place gets (award * .5) rounded down
+                Third place gets (award * .25) rounded down
 
-        Case (Holiday)
-            if holiday: birthday
+        OnMapLoad:
+        Use GetTime() to get current time/date as unix timestamp
+        Use FormatTime() to format the unix timestamp into something readable.
+        Use https://cplusplus.com/reference/ctime/strftime/ as reference for format syntax.
+
+        switch (Holiday)
+            case birthday:
                 use birthday_mapcycle.txt
                 2x credits
                 2x points?
-            if holiday: 420
-                use 420_mapcycle.txt
-            
+                free birthday tag for joining?
+            case 420:
+                use weed_mapcycle.txt
+                2x credits
+                free stoner tag?
+            case halloween:
+                Spooky holiday-themed tags
 
     Server items?
         Micspam privileges
         Colored names (expensive)
         Colored chat (very expensive)
-    
-    Potential Micspam module?
-        Players buy micspam ability from store
-        While players have micspam ability equipped
-            Player's voicechat gets muted
-            Add player to bottom of micspam queue
-            Move player through queue as other players spam / leave / unequip
-            Player uses /start command to start spamming
-            30 seconds to start or else player gets bumped to back of queue
-            Player gets unmuted and has a 10 minute timer to play music.
-            Players can end at any time by using /end
-                Admins can end anyone's spam by using /end <name>
-            Once player is done spamming mute them again, bump up queue. 
+
+    Add /snt_groupmod <gid> <name> (Admin Only Command)
+        Adds / removes a user in the server to a group.
+        GroupIds:
+            1 REGULAR (Default, everyone is part of this group, cannot remove)
+            2 SUPPORTER (For those with the Early Supporter tag in discord)
+            3 CONTRIBUTOR (For advisors / users who have contributed something to the server.)
+            4 DONATOR (For $$$, duh)
+
 */
 
-public void OnPluginStart() 
+bool Weekend;
+bool EventEnabled;
+char CurrentEvent[32] = "None";
+
+// Convars
+ConVar CurrentHoliday;
+ConVar IsWeekend;
+ConVar EventCooldown;
+
+
+public void OnPluginStart()
 {
-    // CheckForCorePackages();
+    CurrentHoliday = CreateConVar("snt_current_holiday", "None", "This shows what holiday it is for the server");
+    IsWeekend = CreateConVar("snt_is_weekend", "false", "This shows whether it is the weekend");
+    EventCooldown = CreateConVar("snt_event_cooldown", "480", "The cooldown time in seconds between events.", 0, true, 300.0)
+    
+    RegAdminCmd("sm_snt_events",    ADM_OpenEventsMenu,      ADMFLAG_GENERIC,    "/snt_events: Use this to open the events menu.");
+    RegAdminCmd("sm_snt_etest",     ADM_TestPlugin,          ADMFLAG_GENERIC,    "test this bitch");
+    //RegAdminCmd("sm_snt_groupmod",  ADM_ModGroup,           ADMFLAG_BAN,        "/snt_groupmod <gid> <user>: Toggle a user's group id. Type list with no user to list all groups");
 }
 
-/*
-bool CheckForCorePackages()
+public void OnMapStart()
 {
-    if (!LibraryExists("sntdb_maps")) 
-    {
-        ThrowError("[SNT] stndb_maps.smx doesn't exist! Invalid install, aborting.");
-        return false;
-    }
-    else if (!LibraryExists("sntdb_ranks"))
-    {
-        ThrowError("[SNT] stndb_ranks.smx doesn't exist! Invalid install, aborting.");
-        return false;
-    }
-    else if (!LibraryExists("sntdb_trails"))
-    {
-        ThrowError("[SNT] stndb_trails.smx doesn't exist! Invalid install, aborting.");
-        return false;
-    }
-    else if (!LibraryExists("sntdb_sound"))
-    {
-        ThrowError("[SNT] stndb_sound.smx doesn't exist! Invalid install, aborting.");
-        return false;
-    }
-    else if (!LibraryExists("sntdb_tags"))
-    {
-        ThrowError("[SNT] stndb_tags.smx doesn't exist! Invalid install, aborting.");
-        return false;
-    }
-    else if (!LibraryExists("sntdb_store"))
-    {
-        ThrowError("[SNT] stndb_tags.smx doesn't exist! Invalid install, aborting.");
-        return false;
-    }
-    return true;
+    char CurrentMonth[8];
+    char CurrentDay[8];
+    char DayOfWeek[16];
+    FormatTime(CurrentMonth, sizeof(CurrentMonth), "%m");
+    FormatTime(CurrentDay, sizeof(CurrentDay), "%d");
+    FormatTime(DayOfWeek, sizeof(DayOfWeek), "%A"); 
+
+    Weekend = CheckWeekend(DayOfWeek);
+    CheckHoliday(CurrentMonth, CurrentDay);
 }
-*/
 
-int CreateMapSQLConfigs(Handle plugin, int numParams)
+bool CheckWeekend(char[] day)
 {
+    if (StrEqual(day, "friday", false) | StrEqual(day, "saturday", false) | StrEqual(day, "sunday", false))
+    {
+        IsWeekend.SetString("true");
+        return true;
+    }
+    else
+    {
+        IsWeekend.SetString("false");
+        return false;
+    }
+}
 
-    PrintToServer("[SNT] Loading SQL configs for map module.");
+void CheckHoliday(char[] cur_month, char[] cur_day)
+{
+    int month = StringToInt(cur_month);
+    int day = StringToInt(cur_day);
+    switch (month)
+    {
+        case 4:
+        {
+            if (day == 20)
+            {
+                CurrentHoliday.SetString("420");
+            }
+        }
+        case 7:
+        {
+            if (day == 14)
+            {
+                CurrentHoliday.SetString("Birthday");
+            }
+        }
+        case 10:
+        {
+            if (day == 31)
+            {
+                CurrentHoliday.SetString("Halloween");
+            }
+        }
+    }
+}
+
+int ReadSQLConfigs(Handle plugin, int numParams)
+{
+    PrintToServer("[SNT] Loading SQL configs");
 
     KeyValues ConfigFile = new KeyValues("ConfigFile");
-    ConfigFile.ImportFromFile("addons/sourcemod/configs/sntdb/main_config.cfg");
+    char ConfigFilePath[PLATFORM_MAX_PATH];
+    BuildPath(Path_SM, ConfigFilePath, sizeof(ConfigFilePath), "configs/sntdb/main_config.cfg");
+
+    ConfigFile.ImportFromFile(ConfigFilePath);
     
     if (ConfigFile == null)
     {
@@ -123,105 +170,115 @@ int CreateMapSQLConfigs(Handle plugin, int numParams)
         return 0;
     }
 
-    if (!ConfigFile.JumpToKey("Maps"))
+    int SYSstore = GetNativeCell(3);
+    char ModuleName[32];
+    GetNativeString(4, ModuleName, sizeof(ModuleName));
+
+    if (SYSstore == 0)
     {
-        ThrowError("[SNT] ERROR! Missing \"Maps\" section from config file.");
-        delete ConfigFile;
-        return 0;
+        if (!ConfigFile.JumpToKey("System"))
+        {
+            ThrowError("[SNT] ERROR! Missing \"System\" section from config file.");
+            delete ConfigFile;
+            return 0;
+        }
+        else
+        {
+            // Declare variables to store configs
+            char dbconfig_name[32];
+            
+            // Gather values from config file and store it in the variables.
+            ConfigFile.GetString("dbconfig",    dbconfig_name,  sizeof(dbconfig_name));
+
+            // Print values gathered to server.
+            PrintToServer("***********  SYSTEM  ************");
+            PrintToServer("[SNT] Called By:\t%s", ModuleName)
+            PrintToServer("[SNT] dbconfig:\t%s", dbconfig_name);
+            PrintToServer("*********************************");
+
+            // Return values back to the user through the function.
+            SetNativeString(1, dbconfig_name, GetNativeCell(2));
+
+            delete ConfigFile;
+            return 1;
+        }
     }
+    else
+    {
+        if (!ConfigFile.JumpToKey("Store"))
+        {
+            ThrowError("[SNT] ERROR! Missing \"Maps\" section from config file.");
+            delete ConfigFile;
+            return 0;
+        }
+        else
+        {
+            // Declare variables to store configs
+            char dbconfig_name[32];
+            
+            // Gather values from config file and store it in the variables.
+            ConfigFile.GetString("dbconfig",    dbconfig_name,  sizeof(dbconfig_name));
 
-    // Declare variables to store configs
-    char dbconfig_name[32];
-    char maplist_path[PLATFORM_MAX_PATH];
-    
-    // Gather values from config file and store it in the variables.
-    ConfigFile.GetString("dbconfig",    dbconfig_name,  sizeof(dbconfig_name));
-    ConfigFile.GetString("filepath",    maplist_path,    sizeof(maplist_path));
+            // Print values gathered to server.
+            PrintToServer("*************  STORE  ************");
+            PrintToServer("[SNT] Called By:\t%s", ModuleName);
+            PrintToServer("[SNT] dbconfig:\t%s", dbconfig_name);
+            PrintToServer("*********************************");
 
-    // Print values gathered to server.
-    PrintToServer("*************  MAPS  ************");
-    PrintToServer("[SNT] dbconfig: %s", dbconfig_name);
-    PrintToServer("[SNT] filepath: %s", maplist_path);
-    PrintToServer("*********************************");
+            // Return values back to the user through the function.
+            SetNativeString(1, dbconfig_name, GetNativeCell(2));
 
-    // Return values back to the user through the function.
-    SetNativeString(1, dbconfig_name, GetNativeCell(2));
-    SetNativeString(3, maplist_path, GetNativeCell(4));
-
-    delete ConfigFile;
-    return 1;
+            delete ConfigFile;
+            return 1;
+        }
+    }
 }
 
-int CreateRankSQLConfigs(Handle plugin, int numparams)
+public int EventMenuHandler(Menu menu, MenuAction action, int param1, int param2)
 {
-
-    PrintToServer ("[SNT] Loading SQL config for ranking module.");
-
-    KeyValues ConfigFile = new KeyValues("ConfigFile");
-    ConfigFile.ImportFromFile("addons/sourcemod/configs/sntdb/main_config.cfg");
-    
-    if (ConfigFile == null)
-    {
-        ThrowError("[SNT] ERROR! \"configs/sntdb/main_config.cfg\": file does not exist!");
-        return 0;
-    }
-
-    if (!ConfigFile.JumpToKey("Ranks"))
-    {
-        ThrowError("[SNT] ERROR! Missing \"Ranks\" section from config file.");
-        delete ConfigFile;
-        return 0;
-    }
-
-    // Declare variables to store config values.
-    char dbconfig_name[32];
-
-    // Gather config values from file
-    ConfigFile.GetString("dbconfig",    dbconfig_name,  sizeof(dbconfig_name));
-
-    // Log values gathered.
-    PrintToServer("*************  RANK  ************");
-    PrintToServer("[SNT] dbconfig: %s", dbconfig_name);
-    PrintToServer("*********************************");
-
-    // Return values back to the user through the function.
-    SetNativeString(1, dbconfig_name, GetNativeCell(2));
-
-    delete ConfigFile;
-    return 1;
+    return 0;
 }
 
-int CreateStoreSQLConfigs(Handle plugin, int numparams)
+public Action ADM_OpenEventsMenu(int client, int args)
 {
+    Menu EventMenu = new Menu(EventMenuHandler, MENU_ACTIONS_DEFAULT);
 
-    PrintToServer("[SNT] Loading SQL configs for store module.");
-
-    KeyValues ConfigFile = new KeyValues("ConfigFile");
-    ConfigFile.ImportFromFile("addons/sourcemod/configs/sntdb/main_config.cfg");
+    char DisplayEvent[64];
+    Format(DisplayEvent, sizeof(DisplayEvent), "Current Event: %s", CurrentEvent);
+ 
+    EventMenu.SetTitle("Choose an event!");
+    EventMenu.AddItem("CURRENT", DisplayEvent, ITEMDRAW_DISABLED);
     
-    if (ConfigFile == null)
+    if (EventEnabled == true)
     {
-        ThrowError("[SNT] ERROR! \"configs/sntdb/main_config.cfg\": file does not exist!");
-        return 0;
+        EventMenu.AddItem("", "", ITEMDRAW_SPACER);
+        EventMenu.AddItem("X", "(2x) Credits for 5 mins!");
+        EventMenu.AddItem("X", "Half off store prices for 5 mins!");
+        EventMenu.AddItem("X", "Mini Contest!");
+    }
+    else
+    {
+        EventMenu.AddItem("", "", ITEMDRAW_SPACER);
+        EventMenu.AddItem("2XCRED", "(2x) Credits for 5 mins!");
+        EventMenu.AddItem("HALFOFF", "Half off store prices for 2 mins!");
+        EventMenu.AddItem("CONTEST", "Mini Contest!");
     }
 
-    if (!ConfigFile.JumpToKey("Store"))
+    EventMenu.Display(client, MENU_TIME_FOREVER);
+    return Plugin_Handled;
+}
+
+public Action ADM_TestPlugin(int client, int args)
+{
+    EventEnabled = !EventEnabled;
+    if (EventEnabled)
     {
-        ThrowError("[SNT] ERROR! Missing \"Store\" section from config file.");
-        delete ConfigFile;
-        return 0;
+        strcopy(CurrentEvent, sizeof(CurrentEvent), "Birthday");
     }
-
-    char dbconfig_name[32];
-
-    ConfigFile.GetString("dbconfig",    dbconfig_name,      sizeof(dbconfig_name));
-
-    PrintToServer("************  STORE  ************");
-    PrintToServer("[SNT] dbconfig : %s", dbconfig_name);
-    PrintToServer("*********************************");
-
-    SetNativeString(1, dbconfig_name, GetNativeCell(2));
-
-    delete ConfigFile;
-    return 1;
+    else
+    {
+        strcopy(CurrentEvent, sizeof(CurrentEvent), "None");
+    }
+    PrintToServer("Done");
+    return Plugin_Handled;
 }
