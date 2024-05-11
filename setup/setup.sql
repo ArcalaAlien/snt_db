@@ -4,7 +4,7 @@ CREATE TABLE snt_players (
     SteamId     varchar(64),
     PlayerName  varchar(64)     NOT NULL,
     Points      int             DEFAULT 0,
-    Credits     int             DEFAULT 250,
+    Credits     int             DEFAULT 750,
     PRIMARY KEY (SteamId)
 );
 
@@ -44,9 +44,10 @@ CREATE TABLE snt_trails (
 CREATE TABLE snt_serveritems (
     ItemId      varchar(15),
     ItemName    varchar(64)     NOT NULL,
+    Owner       varchar(64)     DEFAULT "STORE" NOT NULL,
     Price       int             DEFAULT 0,
     PRIMARY KEY (ItemId)
-)
+);
 
 CREATE TABLE snt_maps (
     MapName     varchar(64),
@@ -62,7 +63,7 @@ CREATE TABLE snt_maps (
 CREATE TABLE snt_playergroups (
     SteamId     varchar(64)     NOT NULL,
     GroupNum     int             NOT NULL,
-    PRIMARY KEY (SteamId),
+    PRIMARY KEY (SteamId, GroupNum),
     FOREIGN KEY (SteamId)  REFERENCES snt_players (SteamId),
     FOREIGN KEY (GroupNum) REFERENCES snt_groups (GroupNum)
 );
@@ -71,7 +72,7 @@ CREATE TABLE snt_playermaps (
     SteamId     varchar(64),
     MapName     varchar(64)     NOT NULL,
     LastVote    int             DEFAULT 0,
-    PRIMARY KEY (SteamId),
+    PRIMARY KEY (SteamId, MapName),
     FOREIGN KEY (SteamId) REFERENCES snt_players (SteamId),
     FOREIGN KEY (MapName) REFERENCES snt_maps (MapName)
 );
@@ -79,60 +80,30 @@ CREATE TABLE snt_playermaps (
 CREATE TABLE snt_playerinventory (
     SteamId     varchar(64)     NOT NULL,
     ItemId      varchar(64)     NOT NULL,
-    PRIMARY KEY (SteamId),
+    Donator     int             DEFAULT 0,
+    PRIMARY KEY (SteamId, ItemId),
     FOREIGN KEY (SteamId) REFERENCES snt_players (SteamId)
 );
 
 -- Create Views --
 
-CREATE VIEW Top10Maps AS
-SELECT VoteCount.MapName, SUM(SubmittedVotes) TotalVotes, CAST(((Rating1+Rating2+Rating3+Rating4+Rating5)/SubmittedVotes) AS decimal(2, 2)) Stars
+CREATE VIEW MapRatings AS
+SELECT VoteCount.MapName, SUM(SubmittedVotes) TotalVotes, CAST(((Rating1+Rating2+Rating3+Rating4+Rating5)/SUM(SubmittedVotes)) AS decimal(10, 2)) Stars
 FROM (
-    SELECT MapName, COUNT(DISTINCT SteamId) SubmittedVotes 
+    SELECT M.MapName, COUNT(DISTINCT SteamId) SubmittedVotes 
     FROM snt_maps M
         JOIN snt_playermaps PM
             ON M.MapName = PM.MapName
-    GROUP BY MapName
+    GROUP BY M.MapName
 ) AS VoteCount
     JOIN snt_maps M
         ON VoteCount.MapName = M.MapName
-GROUP BY MapName
-ORDER BY Stars ASC
-LIMIT 10;
-
-CREATE VIEW Bottom10Maps AS
-SELECT VoteCount.MapName, SUM(SubmittedVotes) TotalVotes, CAST(((Rating1+Rating2+Rating3+Rating4+Rating5)/SubmittedVotes) AS decimal(2, 2)) Stars
-FROM (
-    SELECT MapName, COUNT(SteamId) SubmittedVotes 
-    FROM snt_maps M
-        JOIN snt_playermaps PM
-            ON M.MapName = PM.MapName
-    GROUP BY MapName
-) AS VoteCount
-    JOIN snt_maps M
-        ON VoteCount.MapName = M.MapName
-GROUP BY MapName
-ORDER BY Stars DESC
-LIMIT 10;
-
-CREATE VIEW MapRatingInfo AS
-SELECT VoteCount.MapName, SUM(SubmittedVotes) TotalVotes, CAST(((Rating1+Rating2+Rating3+Rating4+Rating5)/SubmittedVotes) AS decimal(2, 2)) Stars
-FROM (
-    SELECT MapName, COUNT(DISTINCT SteamId) SubmittedVotes 
-    FROM snt_maps M
-        JOIN snt_playermaps PM
-            ON M.MapName = PM.MapName
-    GROUP BY MapName
-) AS VoteCount
-    JOIN snt_maps M
-        ON VoteCount.MapName = M.MapName
-GROUP BY MapName
-ORDER BY MapName;
+GROUP BY VoteCount.MapName;
 
 CREATE VIEW Top10Items AS
-SELECT ItemId, DisplayName, SoundName, TrailName, SUM(Buyers)
+SELECT ItemId, DisplayName, SoundName, TrailName, SUM(Buyers) TotalPurchased
 FROM ( 
-    SELECT ItemId, DisplayName, SoundName, TrailName, COUNT(DISTINCT SteamId) Buyers
+    SELECT PL.ItemId, TA.DisplayName, S.SoundName, TR.TrailName, SI.ItemName, COUNT(DISTINCT PL.SteamId) Buyers
 		FROM snt_playerinventory PL
 			JOIN snt_tags TA
 				ON PL.ItemId = TA.TagId
@@ -140,51 +111,53 @@ FROM (
 				ON PL.ItemId = S.SoundId
 			JOIN snt_trails TR
 				ON PL.ItemId = TR.TrailId
-	WHERE Owner='STORE'
-)
+            JOIN snt_serveritems SI
+                ON PL.ItemId = SI.ItemId
+	WHERE TA.Owner='STORE' OR S.Owner='STORE' OR TR.Owner='STORE' OR SI.Owner='STORE'
+) AS ItemCount
 GROUP BY ItemId, DisplayName, SoundName, TrailName
 LIMIT 10;
 
 CREATE VIEW Top10Tags AS
-SELECT ItemId, DisplayName, SoundName, TrailName, SUM(Buyers)
+SELECT ItemId, DisplayName, SUM(Buyers) TotalPurchased
 FROM ( 
-    SELECT ItemId, DisplayName, SoundName, TrailName, COUNT(DISTINCT SteamId) Buyers
+    SELECT PL.ItemId, TA.DisplayName, COUNT(DISTINCT PL.SteamId) Buyers
 		FROM snt_playerinventory PL
 			JOIN snt_tags TA
 				ON PL.ItemId = TA.TagId
-	WHERE Owner='STORE'
-)
-GROUP BY ItemId, DisplayName, SoundName, TrailName
+	WHERE TA.Owner='STORE'
+) AS TagCount
+GROUP BY ItemId, DisplayName
 ORDER BY Buyers DESC
 LIMIT 10;
 
 CREATE VIEW Top10Sounds AS
-SELECT ItemId, DisplayName, SoundName, TrailName, SUM(Buyers)
+SELECT ItemId, SoundName, SUM(Buyers) TotalPurchased
 FROM ( 
-    SELECT ItemId, DisplayName, SoundName, TrailName, COUNT(DISTINCT SteamId) Buyers
+    SELECT PL.ItemId, S.SoundName, COUNT(DISTINCT PL.SteamId) Buyers
 		FROM snt_playerinventory PL
 			JOIN snt_sounds S
 				ON PL.ItemId = S.SoundId
-	WHERE Owner='STORE'
-)
-GROUP BY ItemId, DisplayName, SoundName, TrailName
+	WHERE S.Owner='STORE'
+) AS SoundCount
+GROUP BY ItemId, SoundName
 ORDER BY Buyers DESC
 LIMIT 10;
 
 CREATE VIEW Top10Trails AS
-SELECT ItemId, DisplayName, SoundName, TrailName, SUM(Buyers)
+SELECT ItemId, TrailName, SUM(Buyers) TotalPurchased
 FROM ( 
-    SELECT ItemId, DisplayName, SoundName, TrailName, COUNT(DISTINCT SteamId) Buyers
+    SELECT PL.ItemId, TR.TrailName, COUNT(DISTINCT PL.SteamId) Buyers
 		FROM snt_playerinventory PL
 			JOIN snt_trails TR
 				ON PL.ItemId = TR.TrailId
-	WHERE Owner='STORE'
-)
-GROUP BY ItemId, DisplayName, SoundName, TrailName
+	WHERE TR.Owner='STORE'
+) AS TrailCount
+GROUP BY ItemId, TrailName
 ORDER BY Buyers DESC
 LIMIT 10;
 
--- Insert Values --
+-- Insert Store Values --
 
 INSERT INTO snt_groups
 VALUES
@@ -198,10 +171,14 @@ VALUES
 ("snd_bruh",    "Bruh",             "snt_sounds/bruh.mp3",              500),
 ("snd_crow",    "Crow",             "snt_sounds/crow.mp3",              250),
 ("snd_door",    "Open Door",        "snt_sounds/open_door.mp3",         1000),
-("snd_gate",    "Open the Gates",   "snt_sounds/open_the_gates.mp3",    1000),
+("snd_gate",    "Open the Gates",   "snt_sounds/open_the_gates.mp3",    250),
 ("snd_augh",    "Augh",             "snt_sounds/augh.mp3",              1000),
 ("snd_tada",    "Tada!!",           "snt_sounds/tada.mp3",              250),
-("snd_fish",    "FISH",             "snt_sounds/fish.mp3",              500);
+("snd_fish",    "FISH",             "snt_sounds/fish.mp3",              500),
+("snd_huh",     "Huh",             "snt_sounds/huh.mp3",                500),
+("snd_uuua",    "UUUUUUUAA",        "snt_sounds/uuua.mp3",              1000),
+("snd_aaau",    "AAAAAAAUU",        "snt_sounds/aaau.mp3",              1000);
+
 
 INSERT INTO snt_trails (TrailId, TrailName, TextureFile, Price)
 VALUES
@@ -240,11 +217,19 @@ VALUES
 ("tag_goon",    "[Gooner]",        "{ghostwhite}",       10000),
 ("tag_snt",     "[SurfNTurf]",     "{mistyrose}",        10000);
 
+INSERT INTO snt_serveritems
+VALUES
+("srvr_mspm",   "Micspamming Privileges",   DEFAULT,    750),
+("srvr_ccht",   "Colored Chat",             DEFAULT,    5000),
+("srvr_cnme",   "Colored Name",             DEFAULT,    2500);
+
+-- Insert items with unique owners --
+
 INSERT INTO snt_tags (TagId, DisplayName, DisplayColor, Owner)
 VALUES
 ("tag_awd_og",      "[OG]",                 "{collectors}",         "[U:1:129770678]"),
 ("tag_awd_fat",     "[Fattest Surfer]",     "{turquoise}",          "[U:1:105279633]"),
-("tag_awd_twp",     "[twerp]",              "{darkorange}",         "[U:1:387291587]"),
+("tag_awd_twrp",    "[twerp]",              "{darkorange}",         "[U:1:387291587]"),
 ("tag_news",    	"[New Surfer]",    		"{white}",              "REGULAR"),
 ("tag_bgns",    	"[Bgn Surfer]",    		"{lightgray}",          "REGULAR"),
 ("tag_ints",    	"[Int Surfer]",    		"{gray}",               "REGULAR"),
@@ -265,6 +250,21 @@ INSERT INTO snt_sounds (SoundId, SoundName, SoundFile, Owner)
 VALUES
 ("snd_myst",    "Mystery",  "snt_sounds/eb_mystery.mp3",    "[U:1:115545346]");
 
+INSERT INTO snt_players (SteamId, PlayerName)
+VALUES
+("[U:1:115545346]", "Arcala the Gyiyg"),
+("[U:1:129770678]", "bob"),
+("[U:1:105279633]", "Emm"),
+("[U:1:387291587]", "twerp");
+
+INSERT INTO snt_playerinventory (SteamId, ItemId)
+VALUES
+("[U:1:129770678]", "tag_awd_og"),
+("[U:1:105279633]", "tag_awd_fat"),
+("[U:1:387291587]", "tag_awd_twrp"),
+("[U:1:387291587]", "srvr_cnme"),
+("[U:1:115545346]", "snd_myst");
+
 -- Create Triggers --
 
 delimiter $$
@@ -272,7 +272,7 @@ delimiter $$
 CREATE TRIGGER Give_Player_Defaults AFTER INSERT ON snt_players FOR EACH ROW
 BEGIN 
 	INSERT INTO snt_playergroup VALUES (NEW.SteamId, 1);
-	INSERT INTO snt_playerinventory
+	INSERT INTO snt_playerinventory (SteamId, ItemId)
 	VALUES
 	(NEW.SteamId, "tag_news"),
 	(NEW.SteamId, "tag_bngs"),
@@ -285,25 +285,49 @@ CREATE TRIGGER Give_Items_For_Group AFTER INSERT ON snt_playergroups FOR EACH RO
 BEGIN
 	CASE NEW.GroupNum
 		WHEN NEW.GroupNum = 2 THEN
-			INSERT INTO snt_playerinventory
+			INSERT INTO snt_playerinventory (SteamId, ItemId)
 			VALUES
 			(NEW.SteamId, "tag_erly"),
 			(NEW.SteamId, "tag_hist"),
-			(NEW.SteamId, "tag_frst");
+			(NEW.SteamId, "tag_frst"),
+            (NEW.SteamId, "srvr_mspm");
 		WHEN NEW.GroupNum = 3 THEN
-			INSERT INTO snt_playerinventory
+			INSERT INTO snt_playerinventory (SteamId, ItemId)
 			VALUES
 			(NEW.SteamId, "tag_cont"),
 			(NEW.SteamId, "tag_desg"),
 			(NEW.SteamId, "tag_mapr"),
-			(NEW.SteamId, "tag_hlpr");
+			(NEW.SteamId, "tag_hlpr"),
+            (NEW.SteamId, "srvr_mpsm");
 		WHEN NEW.GroupNum = 4 THEN
 			INSERT INTO snt_playerinventory
 			VALUES
-			(new.SteamId, "tag_vip"),
-			(new.SteamId, "tag_dnte"),
-			(new.SteamId, "tag_rich");
+			(new.SteamId, "tag_vip", 1),
+			(new.SteamId, "tag_dnte", 1),
+			(new.SteamId, "tag_rich", 1),
+            (new.SteamId, "srvr_mpsm", 1),
+            (new.SteamId, "srvr_cnme", 1);
 	END CASE;
+END$$
+
+CREATE TRIGGER Remove_Donator_Perks BEFORE DELETE ON snt_playergroups FOR EACH ROW
+BEGIN
+    IF OLD.GroupNum=4 THEN
+        DELETE FROM snt_playerinventory
+        WHERE SteamId=OLD.SteamId AND Donator=1;
+    END IF;
+END$$
+
+CREATE TRIGGER Remove_Player_From_Database BEFORE DELETE ON snt_players FOR EACH ROW
+BEGIN
+    DELETE FROM snt_playerinventory WHERE SteamId=OLD.SteamId;
+    DELETE FROM snt_playergroups WHERE SteamId=OLD.SteamId;
+    DELETE FROM snt_playermaps WHERE SteamId=OLD.SteamId;
+END$$
+
+CREATE TRIGGER Remove_Map_From_Database BEFORE DELETE ON snt_maps FOR EACH ROW
+BEGIN
+    DELETE FROM snt_playermaps WHERE MapName=OLD.MapName;
 END$$
 
 delimiter ;

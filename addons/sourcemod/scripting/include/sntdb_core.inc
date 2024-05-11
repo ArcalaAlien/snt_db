@@ -18,32 +18,9 @@ public SharedPlugin __pl_sntdbcore =
  * Loads the configs for the map module from configs/sntdb/main_config.cfg
  * 
  * @param   dbconfig_name           char buffer to store the database profile name.
- * @param   maxlen_confbuffer       size of dbconfig_name buffer
- * @param   maplist_path            char buffer to store the file path to a map list.
- * @param   maxlen_mlbuffer         size of maplist_path buffer
- * @return                          Returns true on success, false on fail.
+ * @param   maxlength               size of dbconfig_name buffer
+ * @param   sysstore                Is the system calling this or the store? (0 - System, 1 - Store);
+ * @param   calledby                What module called this function
+ * @return                          Returns 1 on success, 0 on fail.
  */
-native void LoadMapSQLConfigs(char[] dbconfig_name, int maxlen_confbuffer, char[] maplist_path, int maxlen_mlbuffer);
-
-/**
- * Loads the configs for the ranking module from configs/sntdb/main_config.cfg
- * 
- * @param   dbconfig_name           char buffer to store the database profile name.
- * @param   maxlen_confbuffer       size of dbconfig_name buffer
- * @return                          Returns true on success, false on fail.
- */
-native void LoadRankSQLConfigs(char[] dbconfig_name, int maxlen_confbuffer);
-
-/**
- * Loads the configs for the store module from configs/sntdb/main_config.cfg
- * 
- * @param   dbconfig_name           char buffer to store the database profile name.
- * @param   maxlen_confbuffer       size of dbconfig_name buffer
- * @return                          Returns true on success, false on fail.
- */
-native void LoadStoreSQLConfigs(char[] dbconfig_name, int maxlen_confbuffer);
-
-
-
-
-
+native int LoadSQLConfigs(char[] dbconfig_name, int maxlength, int sysstore, char[] calledby);
