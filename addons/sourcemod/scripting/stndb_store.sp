@@ -11,3 +11,5 @@ public Plugin myinfo =
     version = "1.0.0",
     url = "https://github.com/ArcalaAlien/snt_db"
 };
+
+// Credits are "Dubloons"

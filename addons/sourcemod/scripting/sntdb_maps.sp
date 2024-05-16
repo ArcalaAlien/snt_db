@@ -5,6 +5,7 @@
 #include <dbi>
 #include <files>
 #include <keyvalues>
+#include <menu-stocks>
 
 // Third party includes
 #include <morecolors>
@@ -28,9 +29,11 @@ char DebugFile[PLATFORM_MAX_PATH];
 
 // Config variables
 char DBConfName[32];
+char SchemaName[64];
+char Prefix[96];
 
 //  DB Variables
-Database gDB_sntdb;
+Database DB_sntdb;
 
 // Menus
 Menu Menu_RegularMaps;
@@ -51,11 +54,11 @@ public void OnPluginStart()
         BuildPath(Path_SM, DebugFile, sizeof(DebugFile), "logs/sntdb_maps.log");
     }
 
-    LoadSQLConfigs(DBConfName, sizeof(DBConfName), 0, "Maps");
+    LoadSQLConfigs(0, DBConfName, sizeof(DBConfName), Prefix, sizeof(Prefix), SchemaName, sizeof(SchemaName), "Maps");
 
     PrintToServer("[SNT] Connecting to Database");
     char error[255];
-    gDB_sntdb = SQL_Connect(DBConfName, true, error, sizeof(error));
+    DB_sntdb = SQL_Connect(DBConfName, true, error, sizeof(error));
     if (!StrEqual(error, ""))
     {
         ThrowError("[SNT] ERROR IN PLUGIN START: %s", error);
@@ -79,14 +82,17 @@ public void OnPluginStart()
     WritePackCell(Weed_Pack, Menu_WeedMaps);
     WritePackCell(Weed_Pack, 0);
 
-    SQL_TQuery(gDB_sntdb, SQL_BuildMapMenu, "SELECT MapName FROM snt_maps WHERE EventId=\'evnt_none\'", Reg_Pack);
-    SQL_TQuery(gDB_sntdb, SQL_BuildMapMenu, "SELECT MapName FROM snt_maps WHERE EventId=\'evnt_weed\'", Weed_Pack);
+    char sQuery[512];
+    Format(sQuery, sizeof(sQuery), "SELECT MapName FROM %smaps WHERE EventId=\'evnt_none\'", SchemaName);
+    SQL_TQuery(DB_sntdb, SQL_BuildMapMenu, sQuery, Reg_Pack);
+    Format(sQuery, sizeof(sQuery), "SELECT MapName FROM %smaps WHERE EventId=\'evnt_weed\'", SchemaName);
+    SQL_TQuery(DB_sntdb, SQL_BuildMapMenu, sQuery, Weed_Pack);
 
-    RegAdminCmd("sm_snt_buildtable",   ADM_BuildTables,        ADMFLAG_ROOT,       "/snt_buildtable: Use this to read a mapcycle.txt file and send all the map names to the database.");
-    RegAdminCmd("sm_snt_syncmaps",     ADM_SyncMapMenus,       ADMFLAG_ROOT,       "/snt_syncmaps: Use this to sync the maplists with the database.");
-    RegConsoleCmd("sm_rate",        USR_OpenRatingMenu,                         "/rate: Use this to open the rating menu!");
-    RegConsoleCmd("sm_ratemaps",    USR_OpenRatingMenu,                         "/ratemaps: Use this to open the rating menu!")
-    RegConsoleCmd("sm_ratemap",     USR_RateMap,                                "/ratemap: Use this to rate the current map!");
+    RegAdminCmd("sm_snt_buildtable",    ADM_BuildTables,        ADMFLAG_ROOT,       "/snt_buildtable: Use this to read a mapcycle.txt file and send all the map names to the database.");
+    RegAdminCmd("sm_snt_syncmaps",      ADM_SyncMapMenus,       ADMFLAG_ROOT,       "/snt_syncmaps: Use this to sync the maplists with the database.");
+    RegConsoleCmd("sm_rate",            USR_OpenRatingMenu,                         "/rate: Use this to open the rating menu!");
+    RegConsoleCmd("sm_ratemaps",        USR_OpenRatingMenu,                         "/ratemaps: Use this to open the rating menu!")
+    RegConsoleCmd("sm_ratemap",         USR_RateMap,                                "/ratemap: Use this to rate the current map!");
 
     PrintToServer("[SNT] Registered Commands");
 }
@@ -131,7 +137,7 @@ public int MapsRatingHandler(Menu menu, MenuAction action, int param1, int param
             char SelectedMap[64];
             char SelectedMapEsc[129];
             menu.GetItem(param2, SelectedMap, sizeof(SelectedMap));
-            SQL_EscapeString(gDB_sntdb, SelectedMap, SelectedMapEsc, sizeof(SelectedMapEsc));
+            SQL_EscapeString(DB_sntdb, SelectedMap, SelectedMapEsc, sizeof(SelectedMapEsc));
 
             if (StrEqual(SelectedMap, "N"))
             {
@@ -144,8 +150,8 @@ public int MapsRatingHandler(Menu menu, MenuAction action, int param1, int param
             MapInfo_Pack.WriteCell(param1);
 
             char vQuery[255];
-            Format(vQuery, sizeof(vQuery), "SELECT LastVote FROM snt_playermaps WHERE SteamId=\'%s\' AND MapName=\'%s\'", SteamId, SelectedMapEsc);
-            SQL_TQuery(gDB_sntdb, SQL_GetLastRatingForMenu, vQuery, MapInfo_Pack);
+            Format(vQuery, sizeof(vQuery), "SELECT LastVote FROM %splayermaps WHERE SteamId=\'%s\' AND MapName=\'%s\'", SchemaName, SteamId, SelectedMapEsc);
+            SQL_TQuery(DB_sntdb, SQL_GetLastRatingForMenu, vQuery, MapInfo_Pack);
         }
         case MenuAction_End:
             return 0;
@@ -177,10 +183,10 @@ public int RatingMenuHandler(Menu menu, MenuAction action, int param1, int param
             char MapName[64];
             char MapNameEsc[129];
             strcopy(MapName, sizeof(MapName), ExplodedSelection[0]);
-            SQL_EscapeString(gDB_sntdb, MapName, MapNameEsc, sizeof(MapNameEsc));
+            SQL_EscapeString(DB_sntdb, MapName, MapNameEsc, sizeof(MapNameEsc));
 
             char sQuery[255];
-            Format(sQuery, sizeof(sQuery), "SELECT * FROM snt_playermaps WHERE SteamId=\'%s\' AND MapName=\'%s\'", ClientSteamId, MapNameEsc);
+            Format(sQuery, sizeof(sQuery), "SELECT * FROM %splayermaps WHERE SteamId=\'%s\' AND MapName=\'%s\'", SchemaName, ClientSteamId, MapNameEsc);
 
             DataPack Rating_Info;
             Rating_Info = CreateDataPack();
@@ -209,7 +215,7 @@ public int RatingMenuHandler(Menu menu, MenuAction action, int param1, int param
                 Rating_Info.WriteCell(5);
             }
             
-            SQL_TQuery(gDB_sntdb, SQL_SubmitRating, sQuery, Rating_Info);
+            SQL_TQuery(DB_sntdb, SQL_SubmitRating, sQuery, Rating_Info);
             return 0;
         }
         case MenuAction_Cancel:
@@ -260,7 +266,7 @@ public int ReportMenuHandler(Menu menu, MenuAction action, int param1, int param
                 char CurrentMap[64];
                 char CurrentMapEsc[129];
                 GetCurrentMap(CurrentMap, sizeof(CurrentMap));
-                SQL_EscapeString(gDB_sntdb, CurrentMap, CurrentMapEsc, sizeof(CurrentMapEsc));
+                SQL_EscapeString(DB_sntdb, CurrentMap, CurrentMapEsc, sizeof(CurrentMapEsc));
 
                 DataPack MapInfo_Pack;
                 MapInfo_Pack = CreateDataPack();
@@ -268,8 +274,8 @@ public int ReportMenuHandler(Menu menu, MenuAction action, int param1, int param
                 MapInfo_Pack.WriteCell(param1);
 
                 char vQuery[255];
-                Format(vQuery, sizeof(vQuery), "SELECT LastVote FROM snt_playermaps WHERE SteamId=\'%s\' AND MapName=\'%s\'", SteamId, CurrentMapEsc);
-                SQL_TQuery(gDB_sntdb, SQL_GetLastRatingForMenu, vQuery, MapInfo_Pack);
+                Format(vQuery, sizeof(vQuery), "SELECT LastVote FROM %splayermaps WHERE SteamId=\'%s\' AND MapName=\'%s\'", SchemaName, SteamId, CurrentMapEsc);
+                SQL_TQuery(DB_sntdb, SQL_GetLastRatingForMenu, vQuery, MapInfo_Pack);
             }
             else if (StrEqual(MenuChoice, "SEEMAPINFO"))
             {
@@ -279,7 +285,7 @@ public int ReportMenuHandler(Menu menu, MenuAction action, int param1, int param
                 char CurrentMap[64];
                 char CurrentMapEsc[129];
                 GetCurrentMap(CurrentMap, sizeof(CurrentMap));
-                SQL_EscapeString(gDB_sntdb, CurrentMap, CurrentMapEsc, sizeof(CurrentMapEsc));
+                SQL_EscapeString(DB_sntdb, CurrentMap, CurrentMapEsc, sizeof(CurrentMapEsc));
 
                 PrintToServer("[SNT] User wants to see this map's rating.");
                 DataPack MapInfo_Pack;
@@ -288,8 +294,8 @@ public int ReportMenuHandler(Menu menu, MenuAction action, int param1, int param
                 MapInfo_Pack.WriteCell(param1);
 
                 char vQuery[255];
-                Format(vQuery, sizeof(vQuery), "SELECT * FROM snt_playermaps WHERE MapName=\'%s\'", CurrentMapEsc);
-                SQL_TQuery(gDB_sntdb, SQL_GetMapInfo, vQuery, MapInfo_Pack);
+                Format(vQuery, sizeof(vQuery), "SELECT * FROM %splayermaps WHERE MapName=\'%s\'", SchemaName, CurrentMapEsc);
+                SQL_TQuery(DB_sntdb, SQL_GetMapInfo, vQuery, MapInfo_Pack);
             }
             else if (StrEqual(MenuChoice, "OTHERMAPINFO"))
             {
@@ -305,16 +311,16 @@ public int ReportMenuHandler(Menu menu, MenuAction action, int param1, int param
                 PrintToServer("[SNT] User wants to see the top 10 maps");
                 Client_Pack.WriteCell(1);
                 char sQuery[1024];
-                Format(sQuery, sizeof(sQuery), "SELECT * FROM MapRatings ORDER BY Stars DESC LIMIT 10;");
-                SQL_TQuery(gDB_sntdb, SQL_Build10MapList, sQuery, Client_Pack);
+                Format(sQuery, sizeof(sQuery), "SELECT * FROM %sMapRatings ORDER BY Stars DESC LIMIT 10;", SchemaName);
+                SQL_TQuery(DB_sntdb, SQL_Build10MapList, sQuery, Client_Pack);
             }
             else if (StrEqual(MenuChoice, "BOT10"))
             {
                 PrintToServer("[SNT] User wants to see the bottom 10 maps.");
                 Client_Pack.WriteCell(2);
                 char sQuery[1024];
-                Format(sQuery, sizeof(sQuery), "SELECT * FROM MapRatings ORDER BY Stars ASC LIMIT 10;");
-                SQL_TQuery(gDB_sntdb, SQL_Build10MapList, sQuery, Client_Pack);
+                Format(sQuery, sizeof(sQuery), "SELECT * FROM %sMapRatings ORDER BY Stars ASC LIMIT 10;", SchemaName);
+                SQL_TQuery(DB_sntdb, SQL_Build10MapList, sQuery, Client_Pack);
             }
         }
 
@@ -344,7 +350,7 @@ public int MapInfoCategoryHandler(Menu menu, MenuAction action, int param1, int 
                 InfoRegularMapList.SetTitle("Choose a map to view!");
 
                 char sQuery[255];
-                Format(sQuery, sizeof(sQuery), "SELECT MapName FROM snt_maps WHERE EventId=\'evnt_none\'");
+                Format(sQuery, sizeof(sQuery), "SELECT MapName FROM %smaps WHERE EventId=\'evnt_none\'", SchemaName);
                 PrintToServer("[SNT] Query Ran: %s", sQuery);
 
                 DataPack Client_Pack;
@@ -352,7 +358,7 @@ public int MapInfoCategoryHandler(Menu menu, MenuAction action, int param1, int 
                 Client_Pack.WriteCell(InfoRegularMapList);
                 Client_Pack.WriteCell(param1);
                 
-                SQL_TQuery(gDB_sntdb, SQL_BuildMapMenu, sQuery, Client_Pack);
+                SQL_TQuery(DB_sntdb, SQL_BuildMapMenu, sQuery, Client_Pack);
             }
             else if (StrEqual(MenuChoice, "evnt_weed"))
             {
@@ -366,10 +372,10 @@ public int MapInfoCategoryHandler(Menu menu, MenuAction action, int param1, int 
                 Client_Pack.WriteCell(param1);
 
                 char sQuery[255];
-                Format(sQuery, sizeof(sQuery), "SELECT MapName FROM snt_maps WHERE EventId=\'evnt_weed\'");
+                Format(sQuery, sizeof(sQuery), "SELECT MapName FROM %smaps WHERE EventId=\'evnt_weed\'", SchemaName);
                 PrintToServer("[SNT] Query Ran: %s", sQuery);
                 
-                SQL_TQuery(gDB_sntdb, SQL_BuildMapMenu, sQuery, Client_Pack);
+                SQL_TQuery(DB_sntdb, SQL_BuildMapMenu, sQuery, Client_Pack);
             }
         }
         case MenuAction_End:
@@ -387,7 +393,7 @@ public int MapInfoHandler(Menu menu, MenuAction action, int param1, int param2)
             char MapChoice[64];
             char MapChoiceEsc[129];
             menu.GetItem(param2, MapChoice, sizeof(MapChoice));
-            SQL_EscapeString(gDB_sntdb, MapChoice, MapChoiceEsc, sizeof(MapChoiceEsc));
+            SQL_EscapeString(DB_sntdb, MapChoice, MapChoiceEsc, sizeof(MapChoiceEsc));
 
             char SteamId[64];
             if (IsClientConnected(param1))
@@ -399,8 +405,8 @@ public int MapInfoHandler(Menu menu, MenuAction action, int param1, int param2)
             Map_Info.WriteCell(param1);
 
             char sQuery[512];
-            Format(sQuery, sizeof(sQuery), "SELECT * FROM MapRatings WHERE MapName=\'%s\'", MapChoiceEsc);
-            SQL_TQuery(gDB_sntdb, SQL_GetMapInfo, sQuery, Map_Info);
+            Format(sQuery, sizeof(sQuery), "SELECT * FROM %sMapRatings WHERE MapName=\'%s\'", SchemaName, MapChoiceEsc);
+            SQL_TQuery(DB_sntdb, SQL_GetMapInfo, sQuery, Map_Info);
         }
         case MenuAction_End:
             return 0;
@@ -445,7 +451,7 @@ public void SQL_FillMapTable(Database db, int client)
             Pack_RegMap.WriteString(MapName);
             Pack_RegMap.WriteString("evnt_none");
 
-            Format(sQuery, sizeof(sQuery), "SELECT * FROM snt_maps WHERE MapName=\'%s\' AND EventId=\'evnt_none\'", MapNameEsc);
+            Format(sQuery, sizeof(sQuery), "SELECT * FROM %smaps WHERE MapName=\'%s\' AND EventId=\'evnt_none\'", SchemaName, MapNameEsc);
             SQL_TQuery(db, SQL_InsertMaps, sQuery, Pack_RegMap);
         }
         ReplyToCommand(client, "[SNT] %i regular maps retrieved.", GetArraySize(AL_RegularMaps));
@@ -474,7 +480,7 @@ public void SQL_FillMapTable(Database db, int client)
             Pack_WeedMap.WriteString(MapName);
             Pack_WeedMap.WriteString("evnt_weed");
             PrintToServer("[SNT] Map found: %s", MapName);
-            Format(sQuery, sizeof(sQuery), "SELECT * FROM snt_maps WHERE MapName=\'%s\' AND EventId=\'evnt_weed\'", MapNameEsc);
+            Format(sQuery, sizeof(sQuery), "SELECT * FROM %smaps WHERE MapName=\'%s\' AND EventId=\'evnt_weed\'", SchemaName, MapNameEsc);
             SQL_TQuery(db, SQL_InsertMaps, sQuery, Pack_WeedMap);
         }
         ReplyToCommand(client, "[SNT] %i weed maps retrieved.", GetArraySize(AL_WeedMaps));
@@ -514,7 +520,7 @@ public void SQL_InsertMaps(Database db, DBResultSet results, const char[] error,
             SQL_EscapeString(db, PassedName, PassedNameEsc, sizeof(PassedNameEsc));
             SQL_EscapeString(db, PassedEvent, PassedEventEsc, sizeof(PassedEventEsc));
 
-            Format(iQuery, sizeof(iQuery), "INSERT INTO snt_maps(MapName, EventId) VALUES (\'%s\', \'%s\')", PassedNameEsc, PassedEventEsc);
+            Format(iQuery, sizeof(iQuery), "INSERT INTO %smaps(MapName, EventId) VALUES (\'%s\', \'%s\')", SchemaName, PassedNameEsc, PassedEventEsc);
             SQL_TQuery(db, SQL_ErrorHandler, iQuery);
         }
     }
@@ -795,54 +801,54 @@ public void SQL_SubmitRating(Database db, DBResultSet results, const char[] erro
         switch(SQL_LastVote)
         {
             case 1:
-                Format(uMapQuery1, sizeof(uMapQuery1), "UPDATE snt_maps SET Rating1=Rating1-1 WHERE MapName=\'%s\'", MapNameEsc);
+                Format(uMapQuery1, sizeof(uMapQuery1), "UPDATE %smaps SET Rating1=Rating1-1 WHERE MapName=\'%s\'", SchemaName, MapNameEsc);
             case 2:
-                Format(uMapQuery1, sizeof(uMapQuery1), "UPDATE snt_maps SET Rating2=Rating2-2 WHERE MapName=\'%s\'", MapNameEsc);
+                Format(uMapQuery1, sizeof(uMapQuery1), "UPDATE %smaps SET Rating2=Rating2-2 WHERE MapName=\'%s\'", SchemaName, MapNameEsc);
             case 3:
-                Format(uMapQuery1, sizeof(uMapQuery1), "UPDATE snt_maps SET Rating3=Rating3-3 WHERE MapName=\'%s\'", MapNameEsc);
+                Format(uMapQuery1, sizeof(uMapQuery1), "UPDATE %smaps SET Rating3=Rating3-3 WHERE MapName=\'%s\'", SchemaName, MapNameEsc);
             case 4:
-                Format(uMapQuery1, sizeof(uMapQuery1), "UPDATE snt_maps SET Rating4=Rating4-4 WHERE MapName=\'%s\'", MapNameEsc);
+                Format(uMapQuery1, sizeof(uMapQuery1), "UPDATE %smaps SET Rating4=Rating4-4 WHERE MapName=\'%s\'", SchemaName, MapNameEsc);
             case 5:
-                Format(uMapQuery1, sizeof(uMapQuery1), "UPDATE snt_maps SET Rating5=Rating5-5 WHERE MapName=\'%s\'", MapNameEsc);
+                Format(uMapQuery1, sizeof(uMapQuery1), "UPDATE %smaps SET Rating5=Rating5-5 WHERE MapName=\'%s\'", SchemaName, MapNameEsc);
         }
 
         switch (PlayerVote)
         {
             case 1:
             {
-                Format(uPlyrMapQuery, sizeof(uPlyrMapQuery), "UPDATE snt_playermaps SET LastVote=1 WHERE SteamId=\'%s\' AND MapName=\'%s\'", SteamId, MapNameEsc);
-                Format(uMapQuery2, sizeof(uMapQuery2), "UPDATE snt_maps SET Rating1=Rating1+1 WHERE MapName=\'%s\'", MapNameEsc);
+                Format(uPlyrMapQuery, sizeof(uPlyrMapQuery), "UPDATE %splayermaps SET LastVote=1 WHERE SteamId=\'%s\' AND MapName=\'%s\'", SchemaName, SteamId, SchemaName, SteamId);
+                Format(uMapQuery2, sizeof(uMapQuery2), "UPDATE %smaps SET Rating1=Rating1+1 WHERE MapName=\'%s\'", SchemaName, MapNameEsc);
             }
             case 2:
             {
-                Format(uPlyrMapQuery, sizeof(uPlyrMapQuery), "UPDATE snt_playermaps SET LastVote=2 WHERE SteamId=\'%s\' AND MapName=\'%s\'", SteamId, MapName);
-                Format(uMapQuery2, sizeof(uMapQuery2), "UPDATE snt_maps SET Rating2=Rating2+2 WHERE MapName=\'%s\'", MapNameEsc);
+                Format(uPlyrMapQuery, sizeof(uPlyrMapQuery), "UPDATE %splayermaps SET LastVote=2 WHERE SteamId=\'%s\' AND MapName=\'%s\'", SchemaName, SteamId, MapName);
+                Format(uMapQuery2, sizeof(uMapQuery2), "UPDATE %smaps SET Rating2=Rating2+2 WHERE MapName=\'%s\'", SchemaName, MapNameEsc);
             }
             case 3:
             {
-                Format(uPlyrMapQuery, sizeof(uPlyrMapQuery), "UPDATE snt_playermaps SET LastVote=3 WHERE SteamId=\'%s\' AND MapName=\'%s\'", SteamId, MapName);
-                Format(uMapQuery2, sizeof(uMapQuery2), "UPDATE snt_maps SET Rating3=Rating3+3 WHERE MapName=\'%s\'", MapNameEsc);
+                Format(uPlyrMapQuery, sizeof(uPlyrMapQuery), "UPDATE %splayermaps SET LastVote=3 WHERE SteamId=\'%s\' AND MapName=\'%s\'", SchemaName, SteamId, MapName);
+                Format(uMapQuery2, sizeof(uMapQuery2), "UPDATE %smaps SET Rating3=Rating3+3 WHERE MapName=\'%s\'", SchemaName, MapNameEsc);
             }
             case 4:
             {
-                Format(uPlyrMapQuery, sizeof(uPlyrMapQuery), "UPDATE snt_playermaps SET LastVote=4 WHERE SteamId=\'%s\' AND MapName=\'%s\'", SteamId, MapName);
-                Format(uMapQuery2, sizeof(uMapQuery2), "UPDATE snt_maps SET Rating4=Rating4+4 WHERE MapName=\'%s\'", MapNameEsc);
+                Format(uPlyrMapQuery, sizeof(uPlyrMapQuery), "UPDATE %splayermaps SET LastVote=4 WHERE SteamId=\'%s\' AND MapName=\'%s\'", SchemaName, SteamId, MapName);
+                Format(uMapQuery2, sizeof(uMapQuery2), "UPDATE %smaps SET Rating4=Rating4+4 WHERE MapName=\'%s\'", SchemaName, MapNameEsc);
             }
             case 5:
             {
-                Format(uPlyrMapQuery, sizeof(uPlyrMapQuery), "UPDATE snt_playermaps SET LastVote=5 WHERE SteamId=\'%s\' AND MapName=\'%s\'", SteamId, MapName);
-                Format(uMapQuery2, sizeof(uMapQuery2), "UPDATE snt_maps SET Rating5=Rating5+5 WHERE MapName=\'%s\'", MapNameEsc);
+                Format(uPlyrMapQuery, sizeof(uPlyrMapQuery), "UPDATE %splayermaps SET LastVote=5 WHERE SteamId=\'%s\' AND MapName=\'%s\'", SchemaName, SteamId, MapName);
+                Format(uMapQuery2, sizeof(uMapQuery2), "UPDATE %smaps SET Rating5=Rating5+5 WHERE MapName=\'%s\'", SchemaName, MapNameEsc);
             }
         }
         PrintToServer("[SNT] Query: %s", uPlyrMapQuery);
         PrintToServer("[SNT] Query: %s", uMapQuery1);
         PrintToServer("[SNT] Query: %s", uMapQuery2);
 
-        SQL_TQuery(gDB_sntdb, SQL_ErrorHandler, uPlyrMapQuery);
-        SQL_TQuery(gDB_sntdb, SQL_ErrorHandler, uMapQuery1);
-        SQL_TQuery(gDB_sntdb, SQL_ErrorHandler, uMapQuery2);
+        SQL_TQuery(DB_sntdb, SQL_ErrorHandler, uPlyrMapQuery);
+        SQL_TQuery(DB_sntdb, SQL_ErrorHandler, uMapQuery1);
+        SQL_TQuery(DB_sntdb, SQL_ErrorHandler, uMapQuery2);
 
-        CPrintToChat(client, "{white}[{greenyellow}SNT{white}] Updated your rating for {greenyellow}%s {white}from {gold}%i {white}to {gold}%i {white}star(s)!", MapName, SQL_LastVote, PlayerVote);
+        CPrintToChat(client, "%s Updated your rating for {greenyellow}%s {white}from {gold}%i {white}to {gold}%i {white}star(s)!", Prefix, MapName, SQL_LastVote, PlayerVote);
         PrintToServer("[SNT] Updated player in table and updated maps table.");
     }
     else
@@ -854,37 +860,37 @@ public void SQL_SubmitRating(Database db, DBResultSet results, const char[] erro
         {
             case 1:
             {
-                Format(iPlyrMapQuery, sizeof(iPlyrMapQuery), "INSERT INTO snt_playermaps VALUES (\'%s\', \'%s\', 1)", SteamId, MapNameEsc);
-                Format(uMapQuery, sizeof(uMapQuery), "UPDATE snt_maps SET Rating1=Rating1+1 WHERE MapName=\'%s\'", MapNameEsc);
+                Format(iPlyrMapQuery, sizeof(iPlyrMapQuery), "INSERT INTO %splayermaps VALUES (\'%s\', \'%s\', 1)", SchemaName, SteamId, MapNameEsc);
+                Format(uMapQuery, sizeof(uMapQuery), "UPDATE %smaps SET Rating1=Rating1+1 WHERE MapName=\'%s\'", SchemaName, MapNameEsc);
             }
             case 2:
             {
-                Format(iPlyrMapQuery, sizeof(iPlyrMapQuery), "INSERT INTO snt_playermaps VALUES (\'%s\', \'%s\', 2)", SteamId, MapNameEsc);
-                Format(uMapQuery, sizeof(uMapQuery), "UPDATE snt_maps SET Rating2=Rating2+2 WHERE MapName=\'%s\'", MapNameEsc);
+                Format(iPlyrMapQuery, sizeof(iPlyrMapQuery), "INSERT INTO %splayermaps VALUES (\'%s\', \'%s\', 2)", SchemaName, SteamId, MapNameEsc);
+                Format(uMapQuery, sizeof(uMapQuery), "UPDATE %smaps SET Rating2=Rating2+2 WHERE MapName=\'%s\'", SchemaName, MapNameEsc);
             }
             case 3:
             {
-                Format(iPlyrMapQuery, sizeof(iPlyrMapQuery), "INSERT INTO snt_playermaps VALUES (\'%s\', \'%s\', 3)", SteamId, MapNameEsc);
-                Format(uMapQuery, sizeof(uMapQuery), "UPDATE snt_maps SET Rating3=Rating3+3 WHERE MapName=\'%s\'", MapNameEsc);
+                Format(iPlyrMapQuery, sizeof(iPlyrMapQuery), "INSERT INTO %splayermaps VALUES (\'%s\', \'%s\', 3)", SchemaName, SteamId, MapNameEsc);
+                Format(uMapQuery, sizeof(uMapQuery), "UPDATE %smaps SET Rating3=Rating3+3 WHERE MapName=\'%s\'", SchemaName, MapNameEsc);
             }
             case 4:
             {
-                Format(iPlyrMapQuery, sizeof(iPlyrMapQuery), "INSERT INTO snt_playermaps VALUES (\'%s\', \'%s\', 4)", SteamId, MapNameEsc);
-                Format(uMapQuery, sizeof(uMapQuery), "UPDATE snt_maps SET Rating4=Rating4+4 WHERE MapName=\'%s\'", MapNameEsc);
+                Format(iPlyrMapQuery, sizeof(iPlyrMapQuery), "INSERT INTO %splayermaps VALUES (\'%s\', \'%s\', 4)", SchemaName, SteamId, MapNameEsc);
+                Format(uMapQuery, sizeof(uMapQuery), "UPDATE %smaps SET Rating4=Rating4+4 WHERE MapName=\'%s\'", SchemaName, MapNameEsc);
             }
             case 5:
             {
-                Format(iPlyrMapQuery, sizeof(iPlyrMapQuery), "INSERT INTO snt_playermaps VALUES (\'%s\', \'%s\', 5)", SteamId, MapNameEsc);
-                Format(uMapQuery, sizeof(uMapQuery), "UPDATE snt_maps SET Rating5=Rating5+5 WHERE MapName=\'%s\'", MapNameEsc);
+                Format(iPlyrMapQuery, sizeof(iPlyrMapQuery), "INSERT INTO %splayermaps VALUES (\'%s\', \'%s\', 5)", SchemaName, SteamId, MapNameEsc);
+                Format(uMapQuery, sizeof(uMapQuery), "UPDATE %smaps SET Rating5=Rating5+5 WHERE MapName=\'%s\'", SchemaName, MapNameEsc);
             }
         }
         PrintToServer("[SNT] Query: %s", iPlyrMapQuery);
         PrintToServer("[SNT] Query: %s", uMapQuery);
 
-        SQL_TQuery(gDB_sntdb, SQL_ErrorHandler, iPlyrMapQuery);
-        SQL_TQuery(gDB_sntdb, SQL_ErrorHandler, uMapQuery);
+        SQL_TQuery(DB_sntdb, SQL_ErrorHandler, iPlyrMapQuery);
+        SQL_TQuery(DB_sntdb, SQL_ErrorHandler, uMapQuery);
 
-        CPrintToChat(client, "{white}[{greenyellow}SNT{white}] You rated {greenyellow}%s {gold}%i {white}star(s)!", MapName, PlayerVote);
+        CPrintToChat(client, "%s You rated {greenyellow}%s {gold}%i {white}star(s)!", Prefix, MapName, PlayerVote);
         PrintToServer("[SNT] Inserted player vote into table and updated maps table.");
     }
     PrintToServer("[SNT] %i maps found", RowCount);
@@ -893,7 +899,7 @@ public void SQL_SubmitRating(Database db, DBResultSet results, const char[] erro
 
 public Action ADM_BuildTables(int client, int args)
 {
-    SQL_FillMapTable(gDB_sntdb, client);
+    SQL_FillMapTable(DB_sntdb, client);
     return Plugin_Handled;
 }
 
@@ -914,8 +920,12 @@ public Action ADM_SyncMapMenus(int client, int args)
     WritePackCell(Weed_Pack, Menu_WeedMaps);
     WritePackCell(Weed_Pack, client);
 
-    SQL_TQuery(gDB_sntdb, SQL_BuildMapMenu, "SELECT MapName FROM snt_maps WHERE EventId=\'evnt_none\'", Reg_Pack);
-    SQL_TQuery(gDB_sntdb, SQL_BuildMapMenu, "SELECT MapName FROM snt_maps WHERE EventId=\'evnt_weed\'", Weed_Pack);
+    char sQuery1[512];
+    char sQuery2[512];
+    Format(sQuery1, sizeof(sQuery1), "SELECT MapName FROM %smaps WHERE EventId=\'evnt_none\'", SchemaName);
+    Format(sQuery2, sizeof(sQuery2), "SELECT MapName FROM %smaps WHERE EventId=\'evnt_weed\'", SchemaName);
+    SQL_TQuery(DB_sntdb, SQL_BuildMapMenu, sQuery1, Reg_Pack);
+    SQL_TQuery(DB_sntdb, SQL_BuildMapMenu, sQuery2, Weed_Pack);
 
     return Plugin_Handled;
 }
@@ -942,7 +952,7 @@ public Action USR_RateMap(int client, int args)
     char CurrentMap[64];
     char CurrentMapEsc[129];
     GetCurrentMap(CurrentMap, sizeof(CurrentMap));
-    SQL_EscapeString(gDB_sntdb, CurrentMap, CurrentMapEsc, sizeof(CurrentMapEsc));
+    SQL_EscapeString(DB_sntdb, CurrentMap, CurrentMapEsc, sizeof(CurrentMapEsc));
 
     DataPack MapInfo_Pack;
     MapInfo_Pack = CreateDataPack();
@@ -950,8 +960,8 @@ public Action USR_RateMap(int client, int args)
     MapInfo_Pack.WriteCell(client);
 
     char vQuery[255];
-    Format(vQuery, sizeof(vQuery), "SELECT LastVote FROM snt_playermaps WHERE SteamId=\'%s\' AND MapName=\'%s\'", SteamId, CurrentMapEsc);
-    SQL_TQuery(gDB_sntdb, SQL_GetLastRatingForMenu, vQuery, MapInfo_Pack);
+    Format(vQuery, sizeof(vQuery), "SELECT LastVote FROM %splayermaps WHERE SteamId=\'%s\' AND MapName=\'%s\'", SchemaName, SteamId, CurrentMapEsc);
+    SQL_TQuery(DB_sntdb, SQL_GetLastRatingForMenu, vQuery, MapInfo_Pack);
 
     return Plugin_Handled;
 }
