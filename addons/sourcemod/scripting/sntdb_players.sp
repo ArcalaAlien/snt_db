@@ -351,6 +351,7 @@ public void OnPluginStart()
     RegAdminCmd("sm_snt_rrefresh",      ADM_RefreshDB,  ADMFLAG_BAN,      "Refresh the database for every client in the server.");
 
     RegConsoleCmd("sm_ranks", USR_OpenRankMenu);
+
     RegConsoleCmd("sm_rank", USR_OpenRankMenu);
 }
 
@@ -576,8 +577,11 @@ public void OnPlayerDeath(Event event, const char[] name, bool dontBroadcast)
             float Multi = Player[attacker].GetMultiplier();
 
             // Add our points and multiply it by the KS bonus.
-            APts = APts + (KillPts * Multi);
-            CPrintToChat(attacker, "%s You got %.1f points for killing {yellowgreen}%s{default}!", Prefix, aname, (KillPts*Multi), vname);
+            float PtsToAdd = (KillPts) * (Multi);
+            APts = APts + PtsToAdd;
+            Player[attacker].SetPoints(APts);
+
+            CPrintToChat(attacker, "%s You got %.2f points for killing {yellowgreen}%s{default}!", Prefix, PtsToAdd, vname);
 
             // Update the player's points in the table.
             char uQuery[512];
@@ -618,19 +622,25 @@ public void OnPlayerDeath(Event event, const char[] name, bool dontBroadcast)
                 // Get client's Points
                 float SPts = Player[assister].GetPoints();
 
-                // assister doesn't get multiplied by their killstreak, because they didn't kill the person.
+                // assister doesn't get multiplied by their killstreak, because they didn't kill the person. unless they're a medic.
                 // Is client a medic?
                 if (TF2_GetPlayerClass(assister) == TFClass_Medic)
                 {
                     // Yes, they get special treatment.
-                    SPts = SPts + AssistPtsMed;            
-                    CPrintToChat(attacker, "%s You got %.1f points for helping kill {yellowgreen}%s{default}!", Prefix, AssistPtsMed, vname);
+                    SPts = SPts + AssistPtsMed;
+
+                    HandleKillstreak(victim, assister);
+
+                    Player[assister].SetPoints(APts);         
+                    CPrintToChat(assister, "%s You got {yellowgreen}%.2f points {default}for helping kill {yellowgreen}%s{default}!", Prefix, AssistPtsMed, vname);
                 }
                 else
                 {
                     // No, they get regular treatment.
                     SPts = SPts + AssistPts;
-                    CPrintToChat(attacker, "%s You got %.1f for points helping kill {yellowgreen}%s{default}!", Prefix, AssistPts, vname);
+
+                    Player[assister].SetPoints(APts); 
+                    CPrintToChat(assister, "%s You got {yelllowgreen}%.2f points {default}for helping kill {yellowgreen}%s{default}!", Prefix, AssistPts, vname);
                 }
 
                 //Update the points on our side.
@@ -829,7 +839,7 @@ void HandleKillstreak(int victim, int attacker)
             Player[victim].ResetKS();
 
             // Format msg: "[SNT] Victim ended their own life"
-            Format(msg, sizeof(msg), "%s %s%s {white}ended their own life!", Prefix, VTeamColor, VName);
+            Format(msg, sizeof(msg), "%s %s%s {white}ended their own killstreak!", Prefix, VTeamColor, VName);
 
             // Broadcast msg
             KSMessage(victim, attacker, msg);
@@ -839,10 +849,10 @@ void HandleKillstreak(int victim, int attacker)
         else if (attacker == 0 && Player[victim].GetKS() >= 5)
         {
             Player[victim].ResetKS();
-
+            char msg2[256];
             // Format msg: "[SNT] Victim was smote by a mysterious force!"
-            Format(msg, sizeof(msg), "%s %s%s {white}was smote by a mysterious force!", Prefix, VTeamColor, VName);
-            KSMessage(victim, attacker, msg);
+            Format(msg2, sizeof(msg2), "%s %s%s {white}was smote by a mysterious force!", Prefix, VTeamColor, VName);
+            KSMessage(victim, attacker, msg2);
         }
 
         // Regular operation
@@ -851,10 +861,12 @@ void HandleKillstreak(int victim, int attacker)
             // If the victim had more than 5 kills, broadcast the killstreak message.
             if  (Player[victim].GetKS() >= 5)
             {
+                char msg2[256];
                 // Format msg: "[SNT] Attacker ended Victim's killstreak!"
-                Format(msg, sizeof(msg), "%s %s%s {white}ended %s%s's {white}killstreak!", Prefix, ATeamColor, AName, VTeamColor, VName);
-                KSMessage(victim, attacker, msg);
+                Format(msg2, sizeof(msg2), "%s %s%s {white}ended %s%s's {white}killstreak!", Prefix, ATeamColor, AName, VTeamColor, VName);
+                KSMessage(victim, attacker, msg2);
             }
+
 
             // Reset the victim's killstreak count please!
             Player[victim].ResetKS();
@@ -873,22 +885,22 @@ void HandleKillstreak(int victim, int attacker)
             }
             else if (Player[attacker].GetKS() == Level2Kills)
             {
-                    Format(msg, sizeof(msg), "%s %s%s {white}is %s%s!", Prefix, ATeamColor, AName, L1Color, L1Name);
+                    Format(msg, sizeof(msg), "%s %s%s {white}is %s%s!", Prefix, ATeamColor, AName, L2Color, L2Name);
                     Player[attacker].SetMultiplier(KSCfg.GetMultiplier(2));
             }
             else if (Player[attacker].GetKS() == Level3Kills)
             {
-                    Format(msg, sizeof(msg), "%s %s%s {white}is %s%s!", Prefix, ATeamColor, AName, L1Color, L1Name);
+                    Format(msg, sizeof(msg), "%s %s%s {white}is %s%s!", Prefix, ATeamColor, AName, L3Color, L3Name);
                     Player[attacker].SetMultiplier(KSCfg.GetMultiplier(3));
             }
             else if (Player[attacker].GetKS() == Level4Kills)
             {
-                    Format(msg, sizeof(msg), "%s %s%s {white}is %s%s!", Prefix, ATeamColor, AName, L1Color, L1Name);
+                    Format(msg, sizeof(msg), "%s %s%s {white}is %s%s!", Prefix, ATeamColor, AName, L4Color, L4Name);
                     Player[attacker].SetMultiplier(KSCfg.GetMultiplier(4));
             }
             else if (Player[attacker].GetKS() > Level4Kills)
             {
-                    Format(msg, sizeof(msg), "%s %s%s {white}is still %s%s!", Prefix, ATeamColor, AName, L1Color, L1Name);
+                    Format(msg, sizeof(msg), "%s %s%s {white}is still %s%s!", Prefix, ATeamColor, AName, L4Color, L4Name);
                     Player[attacker].SetMultiplier(KSCfg.GetMultiplier(4));
             }
             // Broadcast the message
@@ -997,7 +1009,7 @@ void BuildPlayerInfoMenu(int client, DataPack data)
 
     Format(NameLine, 196, "Player Name: %s", player_name);
     Format(RankLine, 32, "Player Rank: %i", rank);
-    Format(PointsLine, 32, "Current Points: %.1f", points);
+    Format(PointsLine, 32, "Current Points: %.2f", points);
 
     InfoPanel.DrawText(" ");
     InfoPanel.DrawText(NameLine);
@@ -1048,9 +1060,9 @@ void TestEnums()
         PrintToServer("* UserId: %i", uid);
         PrintToServer("* AuthId: %s", SteamId);
         PrintToServer("* Rank: %i", rank);
-        PrintToServer("* Points: %.1f", points);
+        PrintToServer("* Points: %.2f", points);
         PrintToServer("* Killstreak: %i", ks);
-        PrintToServer("* Multiplier: %.1f", multiplier);
+        PrintToServer("* Multiplier: %.2f", multiplier);
         PrintToServer("[        END       ]");
     }
 }
@@ -1214,7 +1226,7 @@ public void SQL_TestDB(Database db, DBResultSet results, const char[] error, any
         PlyrPoints = SQL_FetchFloat(results, 1);
 
         row++;
-        CPrintToChatAll("%s {darkgrey}%i{cyan}| %s{white}: %.1f points.", Prefix, row, PlyrName, PlyrPoints);
+        CPrintToChatAll("%s {darkgrey}%i{cyan}| %s{white}: %.2f points.", Prefix, row, PlyrName, PlyrPoints);
         SQL_FetchMoreResults(results);
     }
 }

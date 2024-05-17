@@ -135,6 +135,7 @@ enum struct SNT_ClientInfo
     void ResetKS()
     {
         this.KS = 0;
+        this.KSMult = 1.0;
     }
 
     void SetMultiplier(float num)
