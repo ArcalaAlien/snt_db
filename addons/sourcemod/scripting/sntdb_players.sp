@@ -24,20 +24,6 @@ public Plugin myinfo =
     url = "https://github.com/ArcalaAlien/snt_db"
 };
 
-/*
-    TODO:
-        Set up cookies:
-            Does player have their rank displayed?
-
-        Set up rank display:
-            Check if user bought display rank server item
-            if yes:
-                Open rank display menu
-                Allow user to enable / disable
-                Allow user to change between displaying before and after name.
-*/
-
-
 // Settings
 enum struct PSettings
 {
@@ -314,19 +300,19 @@ KSSettings KSCfg;
 
 // Setup Player Variables
 SNT_ClientInfo Player[MAXPLAYERS + 1];
-Cookie RankShown;
-Cookie RankDisPos;
+
+Cookie ck_RankShown;
+Cookie ck_RankDisPos;
 
 // Setup Database
 Database DB_sntdb;
 
 // Setup Convars
-
 ConVar BroadcastKillstreaks;
 
 public void OnPluginStart()
 {
-    LoadSQLConfigs(0, DBConfName, sizeof(DBConfName), Prefix, sizeof(Prefix), SchemaName, sizeof(SchemaName), "Ranks", 1, StoreSchema, sizeof(StoreSchema));
+    LoadSQLConfigs(DBConfName, sizeof(DBConfName), Prefix, sizeof(Prefix), SchemaName, sizeof(SchemaName), "Ranks", 1, StoreSchema, sizeof(StoreSchema));
     LoadRankSettings();
 
     char error[255];
@@ -336,8 +322,8 @@ public void OnPluginStart()
         ThrowError("[SNT] ERROR IN PLUGIN START: %s", error);
     }
 
-    RankShown = RegClientCookie("snt_isrankshown", "Is the player displaying their rank?", CookieAccess_Public);
-    RankDisPos = RegClientCookie("snt_rankdispos", "Does the user want to display their rank before or after thier tags / names?", CookieAccess_Public);
+    ck_RankShown = RegClientCookie("snt_isrankshown", "Is the player displaying their rank?", CookieAccess_Public);
+    ck_RankDisPos = RegClientCookie("snt_rankdispos", "Does the user want to display their rank before or after thier tags / names?", CookieAccess_Public);
 
     BroadcastKillstreaks = CreateConVar("snt_broadcastks", "0", "Used to determine where to send messages. 0: All players, 1: Only killer / killed, 2: Nobody");
 
@@ -345,15 +331,282 @@ public void OnPluginStart()
     HookEvent("player_team", OnPlayerChangedTeam);
 
     RegAdminCmd("sm_snt_reloadrcfg",    ADM_ReloadCFG,  ADMFLAG_ROOT,     "Use this to reload the config file after you've changed it.");
-    RegAdminCmd("sm_snt_rtest1",        ADM_TestDB,     ADMFLAG_ROOT,     "Vomit player ranks to chat. Sorry not sorry.");
-    RegAdminCmd("sm_snt_rtest2",        ADM_TestEnum,   ADMFLAG_ROOT,     "Vomit player info from the custom enums i made into the console wheee");
-    RegAdminCmd("sm_snt_giverankitem",  ADM_GiveItem,   ADMFLAG_ROOT,     "Gives all players in the server the srvr_rank item. for testing purposes.");
     RegAdminCmd("sm_snt_rrefresh",      ADM_RefreshDB,  ADMFLAG_BAN,      "Refresh the database for every client in the server.");
+    RegAdminCmd("sm_snt_starttable",    ADM_StartTable, ADMFLAG_ROOT,     "Insert yourself as the first row of the table. REQUIRED FOR RANKS TO WORK.");
 
     RegConsoleCmd("sm_ranks", USR_OpenRankMenu);
 
     RegConsoleCmd("sm_rank", USR_OpenRankMenu);
 }
+
+// Forwards //
+
+public void OnClientPutInServer(int client)
+{
+    if (IsClientConnected(client) && !IsFakeClient(client))
+    {
+        if (AreClientCookiesCached(client))
+        {
+            char Cookie1[10];
+            char Cookie2[10];
+            GetClientCookie(client, ck_RankShown, Cookie1, sizeof(Cookie1));
+            GetClientCookie(client, ck_RankDisPos, Cookie2, sizeof(Cookie2));
+
+            if (Cookie1[0] == '\0')
+            {
+                SetClientCookie(client, ck_RankShown, "false");
+                Player[client].SetDisplayingRank(false)
+            }
+            else
+            {
+                if (StrEqual(Cookie1, "true"))
+                    Player[client].SetDisplayingRank(true);
+                else
+                    Player[client].SetDisplayingRank(false);
+            }
+            
+            if (Cookie2[0] == '\0')
+            {
+                SetClientCookie(client, ck_RankDisPos, "after");
+                Player[client].SetRankDispPos(1);
+            }
+            else
+            {
+                if (StrEqual(Cookie2, "before"))
+                    Player[client].SetRankDispPos(0);
+                else
+                    Player[client].SetRankDispPos(1);
+            }
+        }
+        else
+        {
+            Player[client].SetRankDispPos(1);
+            Player[client].SetDisplayingRank(false);
+        }
+
+        char SteamId[64];
+        GetClientAuthId(client, AuthId_Steam3, SteamId, sizeof(SteamId));
+
+        char PlayerName[128];
+        char PlayerNameEsc[257];
+        GetClientName(client, PlayerName, 128);
+        SQL_EscapeString(DB_sntdb, PlayerName, PlayerNameEsc, 257);
+
+        char uQuery[512];
+        Format(uQuery, 512, "INSERT INTO %splayers (SteamId, PlayerName) VALUES (\'%s\', \'%s\') ON DUPLICATE KEY UPDATE PlayerName=\'%s\'", SchemaName, SteamId, PlayerNameEsc, PlayerNameEsc);
+        SQL_TQuery(DB_sntdb, SQL_ErrorHandler, uQuery);
+        
+        DataPack Client_Info;
+        Client_Info = CreateDataPack();
+        Client_Info.WriteCell(client);
+        Client_Info.WriteString(SteamId);
+
+        char sQuery[512];
+        Format(sQuery, sizeof(sQuery), "SELECT SteamId, PlayerName, Points FROM %splayers ORDER BY Points DESC", SchemaName)
+        SQL_TQuery(DB_sntdb, SQL_GetPlayerInfo, sQuery, Client_Info)
+    }
+}
+
+public void OnClientDisconnect(int client)
+{
+    Player[client].Reset();
+}
+
+public void OnPlayerDeath(Event event, const char[] name, bool dontBroadcast)
+{
+    // Get our point values!
+    float KillPts = PointCfg.GetKillPts();
+    float AssistPts = PointCfg.GetAsstPts();
+    float AssistPtsMed = PointCfg.GetAsstPtsMed();
+
+    // UserIds
+    int VictimId = GetEventInt(event, "userid");
+    int AttackerId = GetEventInt(event, "attacker");
+    int AssisterId = GetEventInt(event, "assister");
+
+    // Gotta convert to client indexes
+    int victim = GetClientOfUserId(VictimId);
+    int attacker = GetClientOfUserId(AttackerId);
+    int assister = GetClientOfUserId(AssisterId);
+
+    if (attacker != 0 && attacker != victim && victim != 0)
+    {
+        if (!IsFakeClient(attacker) && !IsFakeClient(victim))
+        {
+            // We need our attacker's SteamId!
+            char ASteamId[64];
+            Player[attacker].GetAuthId(ASteamId, sizeof(ASteamId));
+            char vname[128];
+            Player[victim].GetName(vname, sizeof(vname));
+            char aname[128];
+            Player[attacker].GetName(aname, sizeof(aname));
+
+            // Get our attacker's current points.
+            float APts = Player[attacker].GetPoints();
+
+            // Check the killstreak, send the correct message out, set the correct multiplier.
+            HandleKillstreak(victim, attacker);
+
+            // Get point multilpier.
+            float Multi = Player[attacker].GetMultiplier();
+
+            // Add our points and multiply it by the KS bonus.
+            float PtsToAdd = (KillPts) * (Multi);
+            APts = APts + PtsToAdd;
+            Player[attacker].AddPoints(PtsToAdd);
+
+            CPrintToChat(attacker, "%s You got %.2f points for killing {greenyellow}%s{default}!", Prefix, PtsToAdd, vname);
+
+            // Update the player's points in the table.
+            char uQuery[512];
+            Format(uQuery, sizeof(uQuery), "UPDATE %splayers SET Points=%f WHERE SteamId=\'%s\'", SchemaName, APts, ASteamId);
+
+            SQL_TQuery(DB_sntdb, SQL_ErrorHandler, uQuery);
+
+            // Create a datapack to send the client index and steamid through to the SQL function
+            DataPack Attacker_Info;
+            Attacker_Info = CreateDataPack();
+            Attacker_Info.WriteCell(attacker);
+            Attacker_Info.WriteString(ASteamId);
+
+            // Get player's updated rank info
+            char sQuery[512];
+            Format(sQuery, sizeof(sQuery), "SELECT * FROM %splayers ORDER BY Points DESC", SchemaName);
+            SQL_TQuery(DB_sntdb, SQL_GetPlayerRank, sQuery, Attacker_Info);
+
+            // If AssisterId isn't 0
+            if (assister != 0 && !IsFakeClient(assister))
+            {
+                
+                // Get client's SteamId
+                char SSteamId[64];
+                Player[assister].GetAuthId(SSteamId, sizeof(SSteamId));
+
+                DataPack Assister_Info;
+                Assister_Info = CreateDataPack();
+                Assister_Info.WriteCell(assister);
+                Assister_Info.WriteString(SSteamId);
+
+                char asname[128];
+                Player[assister].GetName(asname, sizeof(asname));
+
+                // Get client's Points
+                float SPts = Player[assister].GetPoints();
+
+                // assister doesn't get multiplied by their killstreak, because they didn't kill the person. unless they're a medic.
+                // Is client a medic?
+                if (TF2_GetPlayerClass(assister) == TFClass_Medic)
+                {
+                    // Yes, they get special treatment.
+                    SPts = SPts + AssistPtsMed;
+
+                    HandleKillstreak(victim, assister);
+
+                    Player[assister].AddPoints(AssistPtsMed);         
+                    CPrintToChat(assister, "%s You got {greenyellow}%.2f points {default}for helping kill {greenyellow}%s{default}!", Prefix, AssistPtsMed, vname);
+                }
+                else
+                {
+                    // No, they get regular treatment.
+                    SPts = SPts + AssistPts;
+
+                    Player[assister].AddPoints(AssistPts); 
+                    CPrintToChat(assister, "%s You got {greenyellow}%.2f points {default}for helping kill {greenyellow}%s{default}!", Prefix, AssistPts, vname);
+                }
+                //Update the points on the database's side.
+                Format(uQuery, sizeof(uQuery), "UPDATE %splayers SET Points=%f WHERE SteamId=\'%s\'", SchemaName, SPts, SSteamId);
+
+                SQL_TQuery(DB_sntdb, SQL_ErrorHandler, uQuery);
+
+                // Get player's updated rank info
+                Format(sQuery, sizeof(sQuery), "SELECT * FROM %splayers ORDER BY Points DESC", SchemaName);
+                SQL_TQuery(DB_sntdb, SQL_GetPlayerRank, sQuery, Assister_Info);
+            }
+        }
+    }
+    if (attacker == victim)
+    {
+        HandleKillstreak(attacker, victim);
+    }
+}
+
+public void OnPlayerChangedTeam(Event event, const char[] name, bool dontBroadcast)
+{
+    int User = GetClientOfUserId(GetEventInt(event, "userid"));
+    int TeamNum = GetEventInt(event, "team");
+
+    switch (TeamNum)
+    {
+        case 1:
+            Player[User].SetTeam(TFTeam_Spectator);
+        case 2:
+            Player[User].SetTeam(TFTeam_Red);
+        case 3:
+            Player[User].SetTeam(TFTeam_Blue);
+        default:
+            Player[User].SetTeam(TFTeam_Unassigned);
+    }
+}
+
+public Action CP_OnChatMessage(int& author, ArrayList recipients, char[] flagstring, char[] name, char[] message, bool& processcolors, bool& removecolors)
+{
+    bool IsDisplayed;
+    int DispPos;
+
+    IsDisplayed = Player[author].GetIfDisplayingRank();
+    DispPos = Player[author].GetRankDispPos();
+
+    if (IsDisplayed)
+    {
+        int pos;
+        char pos_color[64];
+        pos = Player[author].GetRank();
+
+        PointCfg.GetPlaceColor(pos, pos_color, sizeof(pos_color));
+        char temp_name[512];
+        switch (DispPos)
+        {
+            case 0:
+            {
+                switch(pos)
+                {
+                    case 0:
+                        Format(temp_name, 512, "%s[NA] %s", pos_color, name);
+                    case 1:
+                        Format(temp_name, 512, "%s[#1] %s", pos_color, name);
+                    case 2:
+                        Format(temp_name, 512, "%s[#2] %s", pos_color, name);
+                    case 3:
+                        Format(temp_name, 512, "%s[#3] %s", pos_color, name);
+                    default:
+                        Format(temp_name, 512, "%s[#%i] %s", pos_color, pos, name);
+                }
+            }
+            case 1:
+            {
+                switch(pos)
+                {
+                    case 0:
+                        Format(temp_name, 512, "%s %s[NA]", name, pos_color);
+                    case 1:
+                        Format(temp_name, 512, "%s %s[#1]", name, pos_color);
+                    case 2:
+                        Format(temp_name, 512, "%s %s[#2]", name, pos_color);
+                    case 3:
+                        Format(temp_name, 512, "%s %s[#3]", name, pos_color);
+                    default:
+                        Format(temp_name, 512, "%s %s[#%i]", name, pos_color, pos);
+                }
+            }
+        }
+
+        strcopy(name, 512, temp_name);
+        return Plugin_Changed;
+    }
+    return Plugin_Changed;
+}
+
+// Custom functions
 
 void LoadRankSettings()
 {
@@ -461,288 +714,6 @@ void LoadRankSettings()
     ConfigFile.Close();
 }
 
-// Forwards //
-
-public void OnClientPutInServer(int client)
-{
-    PrintToServer("[SNT] Client joined the server");
-    if (IsClientConnected(client) && !IsFakeClient(client))
-    {
-        if (AreClientCookiesCached(client))
-        {
-            PrintToServer("[SNT] Cookies for client are cached.");
-            char Cookie1[10];
-            char Cookie2[10];
-            GetClientCookie(client, RankShown, Cookie1, sizeof(Cookie1));
-            GetClientCookie(client, RankDisPos, Cookie2, sizeof(Cookie2));
-
-            if (Cookie1[0] == '\0')
-            {
-                SetClientCookie(client, RankShown, "false");
-                Player[client].SetDisplayingRank(false)
-            }
-            else
-            {
-                if (StrEqual(Cookie1, "true"))
-                {
-                    Player[client].SetDisplayingRank(true);
-                }
-                else
-                {
-                    Player[client].SetDisplayingRank(false);
-                }
-            }
-            
-            if (Cookie2[0] == '\0')
-            {
-                SetClientCookie(client, RankDisPos, "after");
-                Player[client].SetRankDispPos(1);
-            }
-            else
-            {
-                if (StrEqual(Cookie2, "0"))
-                {
-                    Player[client].SetRankDispPos(0);
-                }
-                else
-                {
-                    Player[client].SetRankDispPos(1);
-                }
-            }
-        }
-        else
-        {
-            Player[client].SetRankDispPos(1);
-            Player[client].SetDisplayingRank(false);
-        }
-
-
-        char SteamId[64];
-        GetClientAuthId(client, AuthId_Steam3, SteamId, sizeof(SteamId));
-        
-        DataPack Client_Info;
-        Client_Info = CreateDataPack();
-        Client_Info.WriteCell(client);
-        Client_Info.WriteString(SteamId);
-
-        char sQuery[512];
-        Format(sQuery, sizeof(sQuery), "SELECT SteamId, PlayerName, Points FROM %splayers ORDER BY Points DESC", SchemaName)
-        SQL_TQuery(DB_sntdb, SQL_GetPlayerInfo, sQuery, Client_Info)
-    }
-}
-
-public void OnClientDisconnect(int client)
-{
-    Player[client].Reset();
-}
-
-public void OnPlayerDeath(Event event, const char[] name, bool dontBroadcast)
-{
-    // Get our point values!
-    float KillPts = PointCfg.GetKillPts();
-    float AssistPts = PointCfg.GetAsstPts();
-    float AssistPtsMed = PointCfg.GetAsstPtsMed();
-
-    // UserIds
-    int VictimId = GetEventInt(event, "userid");
-    int AttackerId = GetEventInt(event, "attacker");
-    int AssisterId = GetEventInt(event, "assister");
-
-    // Gotta convert to client indexes
-    int victim = GetClientOfUserId(VictimId);
-    int attacker = GetClientOfUserId(AttackerId);
-    int assister = GetClientOfUserId(AssisterId);
-
-    if (attacker != 0 && attacker != victim && victim != 0)
-    {
-        if (!IsFakeClient(attacker) && !IsFakeClient(victim))
-        {
-            // We need our attacker's SteamId!
-            char ASteamId[64];
-            Player[attacker].GetAuthId(ASteamId, sizeof(ASteamId));
-
-            char vname[128];
-            Player[victim].GetName(vname, sizeof(vname));
-
-            char aname[128];
-            Player[attacker].GetName(aname, sizeof(aname));
-
-            // Get our attacker's current points.
-            float APts = Player[attacker].GetPoints();
-
-            // Check the killstreak, send the correct message out, set the correct multiplier.
-            HandleKillstreak(victim, attacker);
-
-            // Get point multilpier.
-            float Multi = Player[attacker].GetMultiplier();
-
-            // Add our points and multiply it by the KS bonus.
-            float PtsToAdd = (KillPts) * (Multi);
-            APts = APts + PtsToAdd;
-            Player[attacker].SetPoints(APts);
-
-            CPrintToChat(attacker, "%s You got %.2f points for killing {yellowgreen}%s{default}!", Prefix, PtsToAdd, vname);
-
-            // Update the player's points in the table.
-            char uQuery[512];
-            Format(uQuery, sizeof(uQuery), "UPDATE %splayers SET Points=%f WHERE SteamId=\'%s\'", SchemaName, APts, ASteamId);
-
-            DataPack SentQuery;
-            SentQuery = CreateDataPack();
-            WritePackString(SentQuery, uQuery);
-            SQL_TQuery(DB_sntdb, SQL_ErrorHandler, uQuery, SentQuery);
-
-            // Create a datapack to send the client index and steamid through to the SQL function
-            DataPack Attacker_Info;
-            Attacker_Info = CreateDataPack();
-            Attacker_Info.WriteCell(attacker);
-            Attacker_Info.WriteString(ASteamId);
-
-            // Get player's updated rank info
-            char sQuery[512];
-            Format(sQuery, sizeof(sQuery), "SELECT * FROM %splayers ORDER BY Points DESC", SchemaName);
-            SQL_TQuery(DB_sntdb, SQL_GetPlayerRank, sQuery, Attacker_Info);
-
-            // If AssisterId isn't 0
-            if (assister != 0 && !IsFakeClient(assister))
-            {
-                
-                // Get client's SteamId
-                char SSteamId[64];
-                Player[assister].GetAuthId(SSteamId, sizeof(SSteamId));
-
-                DataPack Assister_Info;
-                Assister_Info = CreateDataPack();
-                Assister_Info.WriteCell(assister);
-                Assister_Info.WriteString(SSteamId);
-
-                char asname[128];
-                Player[assister].GetName(asname, sizeof(asname));
-
-                // Get client's Points
-                float SPts = Player[assister].GetPoints();
-
-                // assister doesn't get multiplied by their killstreak, because they didn't kill the person. unless they're a medic.
-                // Is client a medic?
-                if (TF2_GetPlayerClass(assister) == TFClass_Medic)
-                {
-                    // Yes, they get special treatment.
-                    SPts = SPts + AssistPtsMed;
-
-                    HandleKillstreak(victim, assister);
-
-                    Player[assister].SetPoints(APts);         
-                    CPrintToChat(assister, "%s You got {yellowgreen}%.2f points {default}for helping kill {yellowgreen}%s{default}!", Prefix, AssistPtsMed, vname);
-                }
-                else
-                {
-                    // No, they get regular treatment.
-                    SPts = SPts + AssistPts;
-
-                    Player[assister].SetPoints(APts); 
-                    CPrintToChat(assister, "%s You got {yelllowgreen}%.2f points {default}for helping kill {yellowgreen}%s{default}!", Prefix, AssistPts, vname);
-                }
-
-                //Update the points on our side.
-                Player[assister].SetPoints(SPts);
-                
-                //Update the points on the database's side.
-                Format(uQuery, sizeof(uQuery), "UPDATE %splayers SET Points=%f WHERE SteamId=\'%s\'", SchemaName, SPts, SSteamId);
-                DataPack SentQuery2;
-                SentQuery2 = CreateDataPack();
-                WritePackString(SentQuery2, uQuery);
-                SQL_TQuery(DB_sntdb, SQL_ErrorHandler, uQuery, SentQuery2);
-
-                // Get player's updated rank info
-                Format(sQuery, sizeof(sQuery), "SELECT * FROM %splayers ORDER BY Points DESC", SchemaName);
-                SQL_TQuery(DB_sntdb, SQL_GetPlayerRank, sQuery, Assister_Info);
-            }
-        }
-    }
-    if (attacker == victim)
-    {
-        HandleKillstreak(attacker, victim);
-    }
-}
-
-public void OnPlayerChangedTeam(Event event, const char[] name, bool dontBroadcast)
-{
-    int User = GetClientOfUserId(GetEventInt(event, "userid"));
-    int TeamNum = GetEventInt(event, "team");
-
-    switch (TeamNum)
-    {
-        case 1:
-            Player[User].SetTeam(TFTeam_Spectator);
-        case 2:
-            Player[User].SetTeam(TFTeam_Red);
-        case 3:
-            Player[User].SetTeam(TFTeam_Blue);
-        default:
-            Player[User].SetTeam(TFTeam_Unassigned);
-    }
-}
-
-public Action CP_OnChatMessage(int& author, ArrayList recipients, char[] flagstring, char[] name, char[] message, bool& processcolors, bool& removecolors)
-{
-    bool IsDisplayed;
-    int DispPos;
-
-    IsDisplayed = Player[author].GetIfDisplayingRank();
-    DispPos = Player[author].GetRankDispPos();
-
-    if (IsDisplayed)
-    {
-        int pos;
-        char pos_color[64];
-        pos = Player[author].GetRank();
-
-        PointCfg.GetPlaceColor(pos, pos_color, sizeof(pos_color));
-        char temp_name[512];
-        switch (DispPos)
-        {
-            case 0:
-            {
-                switch(pos)
-                {
-                    case 0:
-                        Format(temp_name, 512, "%s[NA] {white}| {teamcolor}%s{default}", pos_color, name);
-                    case 1:
-                        Format(temp_name, 512, "%s[#1] {white}| {teamcolor}%s{default}", pos_color, name);
-                    case 2:
-                        Format(temp_name, 512, "%s[#2] {white}| {teamcolor}%s{default}", pos_color, name);
-                    case 3:
-                        Format(temp_name, 512, "%s[#3] {white}| {teamcolor}%s{default}", pos_color, name);
-                    default:
-                        Format(temp_name, 512, "%s[#%i] {white}| {teamcolor}%s{default}", pos_color, pos, name);
-                }
-            }
-            case 1:
-            {
-                switch(pos)
-                {
-                    case 0:
-                        Format(temp_name, 512, "{teamcolor}%s {white}| %s[NA]{default}", name, pos_color);
-                    case 1:
-                        Format(temp_name, 512, "{teamcolor}%s {white}| %s[#1]{default}", name, pos_color);
-                    case 2:
-                        Format(temp_name, 512, "{teamcolor}%s {white}| %s[#2]{default}", name, pos_color);
-                    case 3:
-                        Format(temp_name, 512, "{teamcolor}%s {white}| %s[#3]{default}", name, pos_color);
-                    default:
-                        Format(temp_name, 512, "{teamcolor}%s {white}| %s[#%i]{default}", name, pos_color, pos);
-                }
-            }
-        }
-
-        strcopy(name, 512, temp_name);
-        return Plugin_Changed;
-    }
-    return Plugin_Changed;
-}
-
-// Custom functions
-
 int KSMessage(int victim, int attacker, char[] string)
 {
     int mode = GetConVarInt(BroadcastKillstreaks);
@@ -835,11 +806,14 @@ void HandleKillstreak(int victim, int attacker)
         char msg[512];
         if (victim == attacker && Player[victim].GetKS() >= 5)
         {
+            // Play a sound.
+            EmitSoundToAll("snt_sounds/ypp_sting.mp3");
+
             // Reset the victim's killstreak count please!
             Player[victim].ResetKS();
 
             // Format msg: "[SNT] Victim ended their own life"
-            Format(msg, sizeof(msg), "%s %s%s {white}ended their own killstreak!", Prefix, VTeamColor, VName);
+            Format(msg, sizeof(msg), "%s %s%s {default}walked the plank, ending thar killstreak!", Prefix, VTeamColor, VName);
 
             // Broadcast msg
             KSMessage(victim, attacker, msg);
@@ -848,10 +822,11 @@ void HandleKillstreak(int victim, int attacker)
         // Were they killed by the server?
         else if (attacker == 0 && Player[victim].GetKS() >= 5)
         {
+            EmitSoundToAll("snt_sounds/ypp_sting.mp3");
             Player[victim].ResetKS();
             char msg2[256];
             // Format msg: "[SNT] Victim was smote by a mysterious force!"
-            Format(msg2, sizeof(msg2), "%s %s%s {white}was smote by a mysterious force!", Prefix, VTeamColor, VName);
+            Format(msg2, sizeof(msg2), "%s %s%s {default}faced Poseidon's wrath, ending thar killstreak!", Prefix, VTeamColor, VName);
             KSMessage(victim, attacker, msg2);
         }
 
@@ -861,9 +836,10 @@ void HandleKillstreak(int victim, int attacker)
             // If the victim had more than 5 kills, broadcast the killstreak message.
             if  (Player[victim].GetKS() >= 5)
             {
+                EmitSoundToAll("snt_sounds/ypp_sting.mp3");
                 char msg2[256];
                 // Format msg: "[SNT] Attacker ended Victim's killstreak!"
-                Format(msg2, sizeof(msg2), "%s %s%s {white}ended %s%s's {white}killstreak!", Prefix, ATeamColor, AName, VTeamColor, VName);
+                Format(msg2, sizeof(msg2), "%s %s%s {default}made %s%s {default}walk the plank, ending thar killstreak!", Prefix, ATeamColor, AName, VTeamColor, VName);
                 KSMessage(victim, attacker, msg2);
             }
 
@@ -878,29 +854,29 @@ void HandleKillstreak(int victim, int attacker)
             if (Player[attacker].GetKS() == Level1Kills)
             {
                     // Format chat message. "[SNT] Player is <ks_name>"
-                    Format(msg, sizeof(msg), "%s %s%s {white}is %s%s!", Prefix, ATeamColor, AName, L1Color, L1Name);
+                    Format(msg, sizeof(msg), "%s %s%s {default}is %s%s!", Prefix, ATeamColor, AName, L1Color, L1Name);
 
                     // Set player's multiplier for the appropriate level.
                     Player[attacker].SetMultiplier(KSCfg.GetMultiplier(1));
             }
             else if (Player[attacker].GetKS() == Level2Kills)
             {
-                    Format(msg, sizeof(msg), "%s %s%s {white}is %s%s!", Prefix, ATeamColor, AName, L2Color, L2Name);
+                    Format(msg, sizeof(msg), "%s %s%s {default}is %s%s!", Prefix, ATeamColor, AName, L2Color, L2Name);
                     Player[attacker].SetMultiplier(KSCfg.GetMultiplier(2));
             }
             else if (Player[attacker].GetKS() == Level3Kills)
             {
-                    Format(msg, sizeof(msg), "%s %s%s {white}is %s%s!", Prefix, ATeamColor, AName, L3Color, L3Name);
+                    Format(msg, sizeof(msg), "%s %s%s {default}is %s%s!", Prefix, ATeamColor, AName, L3Color, L3Name);
                     Player[attacker].SetMultiplier(KSCfg.GetMultiplier(3));
             }
             else if (Player[attacker].GetKS() == Level4Kills)
             {
-                    Format(msg, sizeof(msg), "%s %s%s {white}is %s%s!", Prefix, ATeamColor, AName, L4Color, L4Name);
+                    Format(msg, sizeof(msg), "%s %s%s {default}is %s%s!", Prefix, ATeamColor, AName, L4Color, L4Name);
                     Player[attacker].SetMultiplier(KSCfg.GetMultiplier(4));
             }
             else if (Player[attacker].GetKS() > Level4Kills)
             {
-                    Format(msg, sizeof(msg), "%s %s%s {white}is still %s%s!", Prefix, ATeamColor, AName, L4Color, L4Name);
+                    Format(msg, sizeof(msg), "%s %s%s {default}is still %s%s!", Prefix, ATeamColor, AName, L4Color, L4Name);
                     Player[attacker].SetMultiplier(KSCfg.GetMultiplier(4));
             }
             // Broadcast the message
@@ -911,54 +887,41 @@ void HandleKillstreak(int victim, int attacker)
 
 void BuildPlayerList(int client)
 {
-    PrintToServer("[SNT] BuildPlayerList: Init");
-    PrintToServer("[SNT] BuildPlayerList: Build Menu");
     Menu PlayerList = new Menu(PlayerList_Handler, MENU_ACTIONS_DEFAULT);
-    PlayerList.SetTitle("Choose a player to view:");
+    PlayerList.SetTitle("Choose a crewmate to view:");
     SetMenuExitBackButton(PlayerList, true);
 
-    for (int i = 0; i <= GetClientCount(); i++)
+    for (int i = 1; i <= GetClientCount(); i++)
     {
-        if (i == 0)
         {
-            PrintToServer("[SNT] Server is not a valid client.)");
-        }
-        else
-        {
-            PrintToServer("[SNT] BuildPlayerList: Index %i", i);
             if (!IsFakeClient(i))
             {
-                PrintToServer("[SNT] BuildPlayerList: Client %i", i);
-                PrintToServer("[SNT] BuildPlayerList: player is real");
                 char SteamId[64];
                 char PlayerName[257];
 
                 Player[i].GetAuthId(SteamId, sizeof(SteamId));
                 Player[i].GetName(PlayerName, sizeof(PlayerName));
-
-                PrintToServer("[SNT] BuildPlayerList: Updated steamid and name for player serverside");
                 PlayerList.AddItem(SteamId, PlayerName);
-                PrintToServer("[SNT] BuildPlayerList: Added %s, %s to menu", PlayerName, SteamId);
-            }
-            else
-            {
-                PrintToServer("[SNT] Client is fake.");
             }
         }
     }
-    PrintToServer("[SNT] BuildPlayerList: Display menu to client");
     PlayerList.Display(client, MENU_TIME_FOREVER);
 }
 
 void BuildRankDispMenu(int client)
 {
+    char SteamId[64];
+    GetClientAuthId(client, AuthId_Steam3, SteamId, 64);
+
+    char sQuery[256];
+    Format(sQuery, sizeof(sQuery), "SELECT ItemId FROM %sInventories WHERE SteamId=\'%s\'", StoreSchema, SteamId);
+    SQL_TQuery(DB_sntdb, SQL_CheckPlayerInventory, sQuery, client);
+
     if (Player[client].GetIfOwnsRank())
     {
         Panel DispPanel = CreatePanel(INVALID_HANDLE);
         DispPanel.SetTitle("Rank Display Settings");
-
         DispPanel.DrawText(" ");
-
 
         bool IsDisplayed;
         int DispPos;
@@ -985,7 +948,8 @@ void BuildRankDispMenu(int client)
     }
     else
     {
-        CPrintToChat(client, "{rblxreallyred}You have to buy this from the store first.\n\t  {white}Use {greenyellow}/store {white}to open the menu!", Prefix);
+        EmitSoundToClient(client, "snt_sounds/ypp_sting.mp3");
+        CPrintToChat(client, "{rblxreallyred}Ye have ta buy this from the tavern first!\n{default}Use {greenyellow}/tavern {default}to see their wares!", Prefix);
     }
 }
 
@@ -1025,305 +989,12 @@ void BuildPage1Menu(int client)
 {
     Menu Page1 = new Menu(Page1_Handler, MENU_ACTIONS_DEFAULT);
     Page1.SetTitle("SNT Ranks");
-    Page1.AddItem("VYR", "View your stats!");
-    Page1.AddItem("VPR", "View other player's stats!");
-    Page1.AddItem("TOP", "Top 10 Players!");
-    Page1.AddItem("DISP", "Toggle Rank Display!");
+    Page1.AddItem("VYR", "View yer stats!");
+    Page1.AddItem("VPR", "View yer crewmate's stats!");
+    Page1.AddItem("TOP", "View the top 10 players!");
+    Page1.AddItem("DISP", "Toggle yer rank display!");
     Page1.Display(client, 10);
 }
-
-void TestEnums()
-{
-    for (int i = 1; i <= GetClientCount(); i++)
-    {
-        char Name[128];
-        int client;
-        int uid;
-        char SteamId[64];
-        int rank;
-        float points;
-        int ks;
-        float multiplier;
-
-        Player[i].GetName(Name, sizeof(Name));
-        client = Player[i].GetClientId();
-        uid = Player[i].GetUserId();
-        Player[i].GetAuthId(SteamId, sizeof(SteamId));
-        rank = Player[i].GetRank();
-        points = Player[i].GetPoints();
-        ks = Player[i].GetKS();
-        multiplier = Player[i].GetMultiplier();
-
-        PrintToServer("[    SNT PLAYER    ]");
-        PrintToServer("* Name: %s", Name);
-        PrintToServer("* ClientId: %i", client);
-        PrintToServer("* UserId: %i", uid);
-        PrintToServer("* AuthId: %s", SteamId);
-        PrintToServer("* Rank: %i", rank);
-        PrintToServer("* Points: %.2f", points);
-        PrintToServer("* Killstreak: %i", ks);
-        PrintToServer("* Multiplier: %.2f", multiplier);
-        PrintToServer("[        END       ]");
-    }
-}
-
-// SQL Functions //
-
-public void SQL_ErrorHandler(Database db, DBResultSet results, const char[] error, any data)
-{
-    char offendingQuery[512];
-    ResetPack(data);
-    ReadPackString(data, offendingQuery, 512);
-
-    if (db == null)
-    {
-        PrintToServer("[SNT] ERROR! DATABASE IS NULL!");
-    }
-
-    if (!StrEqual(error, ""))
-    {
-        PrintToServer("[SNT] ERROR IN QUERY! %s", error);
-        PrintToServer("[SNT] OFFENDING QUERY: %s", error);
-    }
-}
-
-public void SQL_GetPlayerInfo(Database db, DBResultSet results, const char[] error, any data)
-{
-    int client;
-    char SteamId[64];
-
-    ResetPack(data);
-    client = ReadPackCell(data);
-    ReadPackString(data, SteamId, sizeof(SteamId));
-    CloseHandle(data);
-
-    char PlayerName[128];
-    char PlayerNameEsc[257];
-
-    GetClientName(client, PlayerName, 128);
-    SQL_EscapeString(db, PlayerName, PlayerNameEsc, 257);
-    while (SQL_FetchRow(results))
-    {
-        char SQL_SteamId[64];
-        SQL_FetchString(results, 0, SQL_SteamId, 64);
-
-        if (StrEqual(SQL_SteamId, SteamId))
-        {
-            PrintToServer("[SNT] SQL_GetPlayerInfo: Found player in table.");
-            char RetrievedName[128];
-            SQL_FetchString(results, 1, RetrievedName, sizeof(RetrievedName));
-
-            Player[client].SetPlayerName(RetrievedName);
-            Player[client].SetClientId(client);
-            Player[client].SetUserId(GetClientUserId(client));
-            Player[client].SetAuthId(SteamId);
-            Player[client].SetPoints(SQL_FetchFloat(results, 1));
-            Player[client].ResetKS();
-            Player[client].SetMultiplier(1.0);
-
-            char uQuery[768];
-            Format(uQuery, sizeof(uQuery), "UPDATE %splayers SET PlayerName=\'%s\' WHERE SteamId=\'%s\'", SchemaName, PlayerNameEsc, SteamId)
-
-            DataPack SentQuery;
-            SentQuery = CreateDataPack();
-            WritePackString(SentQuery, uQuery);
-            SQL_TQuery(db, SQL_ErrorHandler, uQuery, SentQuery);
-
-            char sQuery1[256];
-            Format(sQuery1, sizeof(sQuery1), "SELECT SteamId, Points FROM %splayers ORDER BY Points DESC", SchemaName);
-            
-            DataPack Relay_Info1;
-            Relay_Info1 = CreateDataPack();
-            WritePackCell(Relay_Info1, client);
-            WritePackString(Relay_Info1, SteamId);
-            SQL_TQuery(db, SQL_GetPlayerRank, sQuery1, Relay_Info1);
-
-            char sQuery2[256];
-            Format(sQuery2, sizeof(sQuery2), "SELECT SteamId, ItemId FROM %sInventories", StoreSchema, SteamId);
-            
-            DataPack Relay_Info2;
-            Relay_Info2 = CreateDataPack();
-            WritePackCell(Relay_Info2, client);
-            WritePackString(Relay_Info2, SteamId);
-            SQL_TQuery(db, SQL_CheckPlayerInventory, sQuery2, Relay_Info2);
-            break;
-        }
-
-        if (!SQL_MoreRows(results))
-        {
-            PrintToServer("[SNT] SQL_GetPlayerInfo: Player is not in table.");
-            char ClientName[128];
-            char ClientNameEsc[257];
-
-            GetClientName(client, ClientName, 128);
-            SQL_EscapeString(db, ClientName, ClientNameEsc, 257);
-
-            CPrintToChatAll("%s Welcome {rblxsunrise}%s {default}to the server!", Prefix, ClientName);
-
-            Player[client].SetPlayerName(ClientName);
-            Player[client].SetClientId(client);
-            Player[client].SetUserId(GetClientUserId(client));
-            Player[client].SetAuthId(SteamId);
-            Player[client].SetPoints(0.0);
-            Player[client].SetRank(0);
-            Player[client].ResetKS();
-            Player[client].SetMultiplier(1.0);
-            Player[client].SetOwnsRank(false);
-            Player[client].SetRankDispPos(1);
-
-            char iQuery[512];
-            Format(iQuery, sizeof(iQuery), "INSERT INTO %splayers (SteamId, PlayerName) VALUES (\'%s\', \'%s\')", SchemaName, SteamId, ClientNameEsc);
-
-            DataPack SentQuery;
-            SentQuery = CreateDataPack();
-            WritePackString(SentQuery, iQuery);
-            SQL_TQuery(db, SQL_ErrorHandler, iQuery, SentQuery);
-        }
-    }
-}
-
-public void SQL_GetPlayerRank(Database db, DBResultSet results, const char[] error, any data)
-{
-    int place;
-    int client;
-    char SteamId[64];
-
-    ResetPack(data);
-    client = ReadPackCell(data);
-    ReadPackString(data, SteamId, sizeof(SteamId));
-
-    while (SQL_FetchRow(results))
-    {
-        place++;
-        char SQL_SteamId[64];
-        float Points;
-
-        SQL_FetchString(results, 0, SQL_SteamId, sizeof(SQL_SteamId));
-        Points = SQL_FetchFloat(results, 1);
-
-        if (StrEqual(SQL_SteamId, SteamId))
-        {
-            PrintToServer("[SNT] SQL_GetPlayerRank: Setting plugin-side rank and points for client.");
-            Player[client].SetRank(place);
-            Player[client].SetPoints(Points);
-        }
-    }
-
-    CloseHandle(data);
-}
-
-public void SQL_TestDB(Database db, DBResultSet results, const char[] error, any data)
-{
-    int row;
-
-    CPrintToChatAll("%s Values from Database:", Prefix);
-
-    while (SQL_FetchRow(results))
-    {
-        float PlyrPoints;
-        char PlyrName[128];
-        SQL_FetchString(results, 0, PlyrName, sizeof(PlyrName));
-        PlyrPoints = SQL_FetchFloat(results, 1);
-
-        row++;
-        CPrintToChatAll("%s {darkgrey}%i{cyan}| %s{white}: %.2f points.", Prefix, row, PlyrName, PlyrPoints);
-        SQL_FetchMoreResults(results);
-    }
-}
-
-public void SQL_GetPlayerInfoMenu(Database db, DBResultSet results, const char[] error, any data)
-{
-    int client;
-    char SteamId[64];
-
-    ResetPack(data);
-    client = ReadPackCell(data);
-    ReadPackString(data, SteamId, sizeof(SteamId));
-
-    int row;
-    while (SQL_FetchRow(results))
-    {
-        row++;
-        char SQL_SteamId[64];
-        SQL_FetchString(results, 0, SQL_SteamId, sizeof(SQL_SteamId));
-
-        if (StrEqual(SteamId, SQL_SteamId))
-        {
-            char SQL_PlayerName[128];
-            float SQL_PlayerPoints;
-            SQL_FetchString(results, 1, SQL_PlayerName, sizeof(SQL_PlayerName));
-            SQL_PlayerPoints = SQL_FetchFloat(results, 2);
-
-            DataPack Info_Pack;
-            Info_Pack = CreateDataPack();
-            Info_Pack.WriteString(SQL_PlayerName);
-            Info_Pack.WriteFloat(SQL_PlayerPoints);
-            Info_Pack.WriteCell(row);
-
-            BuildPlayerInfoMenu(client, Info_Pack);
-        }
-        else
-        {
-            PrintToServer("[SNT] SQL_GetPlayerInfoMenu: Unable to find a player match.");
-        }
-    }
-}
-
-public void SQL_BuildTop10(Database db, DBResultSet results, const char[] error, any data)
-{
-    int client;
-
-    ResetPack(data);
-    client = ReadPackCell(data);
-
-    Menu Top10List = new Menu(PlayerList_Handler, MENU_ACTIONS_DEFAULT);
-    Top10List.SetTitle("Top 10 Players:");
-    SetMenuExitBackButton(Top10List, true);
-
-    while (SQL_FetchRow(results))
-    {
-        char SQL_SteamId[64];
-        char SQL_PlayerName[128];
-        SQL_FetchString(results, 0, SQL_SteamId, sizeof(SQL_SteamId));
-        SQL_FetchString(results, 1, SQL_PlayerName, sizeof(SQL_PlayerName));
-        Top10List.AddItem(SQL_SteamId, SQL_PlayerName);
-        SQL_FetchMoreResults(results);
-    }
-
-    Top10List.Display(client, MENU_TIME_FOREVER);
-    CloseHandle(data);
-}
-
-public void SQL_CheckPlayerInventory(Database db, DBResultSet results, const char[] error, any data)
-{
-    int client;
-    char SteamId[64];
-
-    ResetPack(data);
-    client = ReadPackCell(data);
-    ReadPackString(data, SteamId, sizeof(SteamId));
-
-    while (SQL_FetchRow(results))
-    {
-        char SQL_SteamId[64];
-        SQL_FetchString(results, 0, SQL_SteamId, sizeof(SQL_SteamId));
-        char ItemId[64];
-        SQL_FetchString(results, 1, ItemId, sizeof(ItemId));
-
-        if (StrEqual(SteamId, SQL_SteamId))
-        {
-            if (StrEqual(ItemId, "srv_rank"))
-            {
-                PrintToServer("[SNT] SQL_CheckPlayerInventory: Found rank item");
-                Player[client].SetOwnsRank(true);
-            }
-        }
-    }
-
-    CloseHandle(data);
-}
-
-// Menus
 
 public int PlacePanel_Handler(Menu menu, MenuAction action, int param1, int param2)
 {
@@ -1339,11 +1010,13 @@ public int PlacePanel_Handler(Menu menu, MenuAction action, int param1, int para
                 {
                     // it's backwards, shit.
                     CPrintToChat(param1, "%s You are no longer displaying your rank!", Prefix)
+                    SetClientCookie(param1, ck_RankShown, "false");
                 }
                 else
                 {
                     // here too
                     CPrintToChat(param1, "%s You are now displaying your rank!", Prefix)
+                    SetClientCookie(param1, ck_RankShown, "true");
                 }
 
                 BuildRankDispMenu(param1);
@@ -1360,12 +1033,14 @@ public int PlacePanel_Handler(Menu menu, MenuAction action, int param1, int para
                         // here too as well
                         CPrintToChat(param1, "%s Displaying your rank after your name.", Prefix)
                         Player[param1].SetRankDispPos(1);
+                        SetClientCookie(param1, ck_RankDisPos, "after");
                     }
                     case 1:
                     {
                         // and here :(
                         CPrintToChat(param1, "%s Displaying your rank before your name.", Prefix)
                         Player[param1].SetRankDispPos(0);
+                        SetClientCookie(param1, ck_RankDisPos, "before");
                     }
                 }
 
@@ -1435,6 +1110,7 @@ public int InfoPanel_Handler(Menu menu, MenuAction action, int param1, int param
     {
         case MenuAction_Select:
         {
+            EmitSoundToClient(param1, "buttons/button14.wav");
             switch (param2)
             {
                 case 1:
@@ -1451,6 +1127,7 @@ public int InfoPanel_Handler(Menu menu, MenuAction action, int param1, int param
         }
         case MenuAction_Cancel:
         {
+            EmitSoundToClient(param1, "buttons/combine_button7.wav");
             CloseHandle(menu);
         }
     }
@@ -1494,56 +1171,220 @@ public int PlayerList_Handler(Menu menu, MenuAction action, int param1, int para
     return 0;
 }
 
-// Commands //
+public void SQL_ErrorHandler(Database db, DBResultSet results, const char[] error, any data)
+{
+    if (db == null)
+    {
+        PrintToServer("[SNT] ERROR! DATABASE IS NULL!");
+    }
+
+    if (!StrEqual(error, ""))
+    {
+        PrintToServer("[SNT] ERROR IN QUERY: %s", error);
+    }
+}
+
+public void SQL_GetPlayerInfo(Database db, DBResultSet results, const char[] error, any data)
+{
+    if (db == null)
+    {
+        PrintToServer("[SNT] ERROR! DATABASE IS NULL!");
+    }
+
+    if (!StrEqual(error, ""))
+    {
+        PrintToServer("[SNT] ERROR IN QUERY: %s", error);
+    }
+
+    int client;
+    char SteamId[64];
+
+    ResetPack(data);
+    client = ReadPackCell(data);
+    ReadPackString(data, SteamId, sizeof(SteamId));
+    CloseHandle(data);
+
+    char PlayerName[128];
+    char PlayerNameEsc[257];
+
+    GetClientName(client, PlayerName, 128);
+    SQL_EscapeString(db, PlayerName, PlayerNameEsc, 257);
+
+    int place;
+    while (SQL_FetchRow(results))
+    {
+        place++;
+        char SQL_SteamId[64];
+        SQL_FetchString(results, 0, SQL_SteamId, 64);
+
+        if (StrEqual(SQL_SteamId, SteamId))
+        {
+            char RetrievedName[128];
+            SQL_FetchString(results, 1, RetrievedName, sizeof(RetrievedName));
+
+            Player[client].SetPlayerName(RetrievedName);
+            Player[client].SetClientId(client);
+            Player[client].SetUserId(GetClientUserId(client));
+            Player[client].SetAuthId(SteamId);
+            Player[client].SetPoints(SQL_FetchFloat(results, 2));
+            Player[client].SetRank(place);
+            Player[client].ResetKS();
+            Player[client].SetMultiplier(1.0);
+
+            char sQuery2[256];
+            Format(sQuery2, sizeof(sQuery2), "SELECT ItemId FROM %sInventories WHERE SteamId=\'%s\'", StoreSchema, SteamId);
+            SQL_TQuery(db, SQL_CheckPlayerInventory, sQuery2, client);
+            break;
+        }
+        else if (!StrEqual(SteamId, SQL_SteamId) && !SQL_MoreRows(results))
+        {
+            char ClientName[128];
+            GetClientName(client, ClientName, 128);
+            CPrintToChatAll("%s Welcome {orange}%s {default}to the server!", Prefix, ClientName);
+
+            Player[client].SetPlayerName(ClientName);
+            Player[client].SetClientId(client);
+            Player[client].SetUserId(GetClientUserId(client));
+            Player[client].SetAuthId(SteamId);
+            Player[client].SetPoints(0.0);
+            Player[client].SetRank(0);
+            Player[client].ResetKS();
+            Player[client].SetMultiplier(1.0);
+            Player[client].SetOwnsRank(false);
+            Player[client].SetRankDispPos(1);
+        }
+    }
+}
+
+public void SQL_GetPlayerRank(Database db, DBResultSet results, const char[] error, any data)
+{
+    int place;
+    int client;
+    char SteamId[64];
+
+    ResetPack(data);
+    client = ReadPackCell(data);
+    ReadPackString(data, SteamId, sizeof(SteamId));
+
+    while (SQL_FetchRow(results))
+    {
+        place++;
+        char SQL_SteamId[64];
+
+        SQL_FetchString(results, 0, SQL_SteamId, sizeof(SQL_SteamId));
+
+        if (StrEqual(SQL_SteamId, SteamId))
+        {
+            Player[client].SetRank(place);
+            break;
+        }
+    }
+
+    CloseHandle(data);
+}
+
+public void SQL_TestDB(Database db, DBResultSet results, const char[] error, any data)
+{
+    int row;
+
+    CPrintToChatAll("%s Values from Database:", Prefix);
+
+    while (SQL_FetchRow(results))
+    {
+        float PlyrPoints;
+        char PlyrName[128];
+        SQL_FetchString(results, 0, PlyrName, sizeof(PlyrName));
+        PlyrPoints = SQL_FetchFloat(results, 1);
+
+        row++;
+        CPrintToChatAll("%s {darkgrey}%i{cyan}| %s{white}: %.2f points.", Prefix, row, PlyrName, PlyrPoints);
+    }
+}
+
+public void SQL_GetPlayerInfoMenu(Database db, DBResultSet results, const char[] error, any data)
+{
+    int client;
+    char SteamId[64];
+
+    ResetPack(data);
+    client = ReadPackCell(data);
+    ReadPackString(data, SteamId, sizeof(SteamId));
+
+    int row;
+    while (SQL_FetchRow(results))
+    {
+        row++;
+        char SQL_SteamId[64];
+        SQL_FetchString(results, 0, SQL_SteamId, sizeof(SQL_SteamId));
+
+        if (StrEqual(SteamId, SQL_SteamId))
+        {
+            char SQL_PlayerName[128];
+            float SQL_PlayerPoints;
+            SQL_FetchString(results, 1, SQL_PlayerName, sizeof(SQL_PlayerName));
+            SQL_PlayerPoints = SQL_FetchFloat(results, 2);
+
+            DataPack Info_Pack;
+            Info_Pack = CreateDataPack();
+            Info_Pack.WriteString(SQL_PlayerName);
+            Info_Pack.WriteFloat(SQL_PlayerPoints);
+            Info_Pack.WriteCell(row);
+
+            BuildPlayerInfoMenu(client, Info_Pack);
+            break;
+        }
+        else
+        {
+            PrintToServer("[SNT] SQL_GetPlayerInfoMenu: Unable to find a player match.");
+        }
+    }
+}
+
+public void SQL_BuildTop10(Database db, DBResultSet results, const char[] error, any data)
+{
+    int client;
+
+    ResetPack(data);
+    client = ReadPackCell(data);
+
+    Menu Top10List = new Menu(PlayerList_Handler, MENU_ACTIONS_DEFAULT);
+    Top10List.SetTitle("Top 10 Players:");
+    SetMenuExitBackButton(Top10List, true);
+
+    while (SQL_FetchRow(results))
+    {
+        char SQL_SteamId[64];
+        char SQL_PlayerName[128];
+        SQL_FetchString(results, 0, SQL_SteamId, sizeof(SQL_SteamId));
+        SQL_FetchString(results, 1, SQL_PlayerName, sizeof(SQL_PlayerName));
+        if (StrEqual("SQL_SteamId", "ROOT"))
+            continue;
+        Top10List.AddItem(SQL_SteamId, SQL_PlayerName);
+    }
+
+    Top10List.Display(client, MENU_TIME_FOREVER);
+    CloseHandle(data);
+}
+
+public void SQL_CheckPlayerInventory(Database db, DBResultSet results, const char[] error, any client)
+{
+    while (SQL_FetchRow(results))
+    {
+        char ItemId[64];
+        SQL_FetchString(results, 0, ItemId, sizeof(ItemId));
+
+        if (StrEqual(ItemId, "srv_rank"))
+        {
+            Player[client].SetOwnsRank(true);
+            break;
+        }
+    }
+}
 
 public Action ADM_ReloadCFG(int client, int args)
 {
     LoadRankSettings()
     ReplyToCommand(client, "[SNT] Succesfully reloaded \'main_config.cfg\'", Prefix);
-    return Plugin_Handled;
-}
-
-public Action ADM_TestDB(int client, int args)
-{
-    char sQuery[256];
-    Format(sQuery, sizeof(sQuery), "SELECT PlayerName, Points FROM %splayers ORDER BY Points DESC", SchemaName)
-    SQL_TQuery(DB_sntdb, SQL_TestDB, sQuery);
-    return Plugin_Handled;
-}
-
-public Action ADM_TestEnum(int client, int args)
-{
-    TestEnums();
-    return Plugin_Handled;
-}
-
-public Action ADM_GiveItem(int client, int args)
-{
-    for (int i = 1; i <= GetClientCount(); i++)
-    {
-        char SteamId[64];
-        GetClientAuthId(i, AuthId_Steam3, SteamId, sizeof(SteamId));
-
-        char ClientName[128];
-        char ClientNameEsc[257];
-        GetClientName(i, ClientName, sizeof(ClientName));
-        SQL_EscapeString(DB_sntdb, ClientName, ClientNameEsc, sizeof(ClientNameEsc));
-
-        char iQuery1[512];
-        Format(iQuery1, sizeof(iQuery1), "INSERT INTO %splayers (SteamId, PlayerName) VALUES (\'%s\', \'%s\')", StoreSchema, SteamId, ClientNameEsc);
-        char iQuery2[512];
-        Format(iQuery2, sizeof(iQuery2), "INSERT INTO %splayeritems (SteamId, ItemId) VALUES (\'%s\', 'srv_rank')", StoreSchema, SteamId);
-
-        DataPack SentQuery1;
-        SentQuery1 = CreateDataPack();
-        WritePackString(SentQuery1, iQuery1);
-        SQL_TQuery(DB_sntdb, SQL_ErrorHandler, iQuery1, SentQuery1);
-        
-        DataPack SentQuery2;
-        SentQuery2 = CreateDataPack();
-        WritePackString(SentQuery2, iQuery2);
-        SQL_TQuery(DB_sntdb, SQL_ErrorHandler, iQuery2, SentQuery2);
-    }
     return Plugin_Handled;
 }
 
@@ -1564,6 +1405,35 @@ public Action ADM_RefreshDB(int client, int args)
         SQL_TQuery(DB_sntdb, SQL_GetPlayerInfo, sQuery, Client_Pack);
     }
 
+    return Plugin_Handled;
+}
+
+public Action ADM_StartTable(int client, int args)
+{
+    char SteamId[64];
+    GetClientAuthId(client, AuthId_Steam3, SteamId, 64);
+
+    char ClientName[128];
+    char ClientNameEsc[257];
+
+    GetClientName(client, ClientName, 128);
+    SQL_EscapeString(DB_sntdb, ClientName, ClientNameEsc, 257);
+
+    Player[client].SetPlayerName(ClientName);
+    Player[client].SetClientId(client);
+    Player[client].SetUserId(GetClientUserId(client));
+    Player[client].SetAuthId(SteamId);
+    Player[client].SetPoints(0.0);
+    Player[client].SetRank(0);
+    Player[client].ResetKS();
+    Player[client].SetMultiplier(1.0);
+    Player[client].SetOwnsRank(false);
+    Player[client].SetRankDispPos(1);
+
+    char iQuery[512];
+    Format(iQuery, sizeof(iQuery), "INSERT INTO %splayers (SteamId, PlayerName) VALUES (\'%s\', \'%s\')", SchemaName, SteamId, ClientNameEsc);
+
+    SQL_TQuery(DB_sntdb, SQL_ErrorHandler, iQuery);
     return Plugin_Handled;
 }
 
