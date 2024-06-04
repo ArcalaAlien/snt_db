@@ -54,7 +54,7 @@ public void OnPluginStart()
         BuildPath(Path_SM, DebugFile, sizeof(DebugFile), "logs/sntdb_maps.log");
     }
 
-    LoadSQLConfigs(0, DBConfName, sizeof(DBConfName), Prefix, sizeof(Prefix), SchemaName, sizeof(SchemaName), "Maps");
+    LoadSQLConfigs(DBConfName, sizeof(DBConfName), Prefix, sizeof(Prefix), SchemaName, sizeof(SchemaName), "Maps");
 
     PrintToServer("[SNT] Connecting to Database");
     char error[255];
@@ -95,6 +95,8 @@ public void OnPluginStart()
     RegConsoleCmd("sm_ratemap",         USR_RateMap,                                "/ratemap: Use this to rate the current map!");
 
     PrintToServer("[SNT] Registered Commands");
+
+    SQL_FillMapTable(DB_sntdb, 0);
 }
 
 /* MENU HANDLERS */
@@ -436,23 +438,15 @@ public void SQL_FillMapTable(Database db, int client)
         ReadMapList(AL_RegularMaps, ReturnedSerials[0], "snt_regularmaps");
         for (int i = 0; i < GetArraySize(AL_RegularMaps); i++)
         {
-            DataPack Pack_RegMap;
-            Pack_RegMap = CreateDataPack();
-            Pack_RegMap.Reset(true);
-
-            char sQuery[512];
+            char iQuery[512];
             char MapName[64];
             char MapNameEsc[129];
 
             AL_RegularMaps.GetString(i, MapName, sizeof(MapName));
             PrintToServer("[SNT] MapName: %s", MapName);
             SQL_EscapeString(db, MapName, MapNameEsc, sizeof(MapNameEsc));
-        
-            Pack_RegMap.WriteString(MapName);
-            Pack_RegMap.WriteString("evnt_none");
-
-            Format(sQuery, sizeof(sQuery), "SELECT * FROM %smaps WHERE MapName=\'%s\' AND EventId=\'evnt_none\'", SchemaName, MapNameEsc);
-            SQL_TQuery(db, SQL_InsertMaps, sQuery, Pack_RegMap);
+            Format(iQuery, sizeof(iQuery), "INSERT INTO %smaps(MapName, EventId) VALUES (\'%s\', \'evnt_none\') ON DUPLICATE KEY UPDATE MapName=\'%s\'", SchemaName, MapNameEsc, MapNameEsc);
+            SQL_TQuery(db, SQL_ErrorHandler, iQuery);
         }
         ReplyToCommand(client, "[SNT] %i regular maps retrieved.", GetArraySize(AL_RegularMaps));
     }
@@ -466,22 +460,15 @@ public void SQL_FillMapTable(Database db, int client)
         ReadMapList(AL_WeedMaps, ReturnedSerials[1], "snt_weedmaps");
         for (int i = 0; i < GetArraySize(AL_WeedMaps); i++)
         {
-            DataPack Pack_WeedMap;
-            Pack_WeedMap = CreateDataPack();
-            Pack_WeedMap.Reset(true);
-
-            char sQuery[512];
+            char iQuery[512];
             char MapName[64];
             char MapNameEsc[129];
 
             AL_WeedMaps.GetString(i, MapName, sizeof(MapName));
             SQL_EscapeString(db, MapName, MapNameEsc, sizeof(MapNameEsc));
-        
-            Pack_WeedMap.WriteString(MapName);
-            Pack_WeedMap.WriteString("evnt_weed");
-            PrintToServer("[SNT] Map found: %s", MapName);
-            Format(sQuery, sizeof(sQuery), "SELECT * FROM %smaps WHERE MapName=\'%s\' AND EventId=\'evnt_weed\'", SchemaName, MapNameEsc);
-            SQL_TQuery(db, SQL_InsertMaps, sQuery, Pack_WeedMap);
+            
+            Format(iQuery, sizeof(iQuery), "INSERT INTO %smaps(MapName, EventId) VALUES (\'%s\', \'evnt_weed\') ON DUPLICATE KEY UPDATE MapName=\'%s\'", SchemaName, MapNameEsc, MapNameEsc);
+            SQL_TQuery(db, SQL_ErrorHandler, iQuery);
         }
         ReplyToCommand(client, "[SNT] %i weed maps retrieved.", GetArraySize(AL_WeedMaps));
     }
@@ -489,43 +476,6 @@ public void SQL_FillMapTable(Database db, int client)
     {
         ReplyToCommand(client, "[SNT] No weed maps retrieved.");
     }
-}
-
-public void SQL_InsertMaps(Database db, DBResultSet results, const char[] error, any data)
-{
-    if (db == null)
-    {
-        PrintToServer("SQL_IsMapInTable: DATABASE IS NULL");
-    }
-
-    if (!StrEqual(error, ""))
-    {
-        PrintToServer("SQL_IsMapInTable: ERROR WHEN VALIDATING MAPS: %s", error);
-    }
-
-    if (data)
-    {
-        char PassedName[64];
-        char PassedEvent[64];
-        ResetPack(data);
-        ReadPackString(data, PassedName, 64);
-        ReadPackString(data, PassedEvent, 64);
-
-        if (!SQL_MoreRows(results))
-        {
-            
-            char iQuery[255];
-            char PassedNameEsc[129];
-            char PassedEventEsc[129];
-            SQL_EscapeString(db, PassedName, PassedNameEsc, sizeof(PassedNameEsc));
-            SQL_EscapeString(db, PassedEvent, PassedEventEsc, sizeof(PassedEventEsc));
-
-            Format(iQuery, sizeof(iQuery), "INSERT INTO %smaps(MapName, EventId) VALUES (\'%s\', \'%s\')", SchemaName, PassedNameEsc, PassedEventEsc);
-            SQL_TQuery(db, SQL_ErrorHandler, iQuery);
-        }
-    }
-
-    CloseHandle(data);
 }
 
 public void SQL_BuildMapMenu(Database db, DBResultSet results, const char[] error, any data)
@@ -743,6 +693,7 @@ public void SQL_GetMapInfo(Database db, DBResultSet results, const char[] error,
         Format(FTotalVotes, sizeof(FTotalVotes), "Total Votes: %i", TotalVotes);
 
         MapInfoMenu.SetTitle("Viewing Map: %s", MapName);
+        MapInfoMenu.AddItem("", "", ITEMDRAW_SPACER);
         MapInfoMenu.AddItem("Name", FMapName, ITEMDRAW_DISABLED);
         MapInfoMenu.AddItem("Rating", FMapRating, ITEMDRAW_DISABLED);
         MapInfoMenu.AddItem("Votes", FTotalVotes, ITEMDRAW_DISABLED);
@@ -753,6 +704,7 @@ public void SQL_GetMapInfo(Database db, DBResultSet results, const char[] error,
     else
     {
         MapInfoMenu.SetTitle("Viewing Map: %s", MapName);
+        MapInfoMenu.AddItem("", "", ITEMDRAW_SPACER);
         MapInfoMenu.AddItem("NOVOTES", "There have been no votes for this map yet.", ITEMDRAW_DISABLED);
         MapInfoMenu.AddItem("NOVOTES", "Do you want to rate this map?", ITEMDRAW_DISABLED);
         MapInfoMenu.AddItem("", "", ITEMDRAW_SPACER);

@@ -33,33 +33,37 @@ CREATE TABLE storecolors(
 );
 
 CREATE TABLE storesounds (
-    ItemId      varchar(15),
+    ItemId      varchar(64),
     SoundName   varchar(64)     NOT NULL,
     SoundFile   varchar(260)    NOT NULL,
+    Cooldown    float(3)        DEFAULT 2.0 NOT NULL,
     Owner       varchar(64)     DEFAULT "STORE" NOT NULL,
     Price       int             DEFAULT 0,
     PRIMARY KEY (ItemId)
 );
 
 CREATE TABLE storetrails (
-    ItemId     varchar(15),
-    TrailName   varchar(64)     NOT NULL,
-    TextureFile varchar(260)    NOT NULL,
-    Owner       varchar(64)     DEFAULT "STORE" NOT NULL,
-    Price       int             DEFAULT 0,
+    ItemId          varchar(64),
+    TrailName       varchar(64)         NOT NULL,
+    TextureVTF      varchar(260)        NOT NULL,
+    TextureVMT      varchar(260)        NOT NULL,
+    ModelIndex      int                 DEFAULT -1 NOT NULL,
+    Owner           varchar(64)         DEFAULT "STORE" NOT NULL,
+    Price           int                 DEFAULT 0,
     PRIMARY KEY (ItemId)
 );
 
 CREATE TABLE storeserveritems (
-    ItemId      varchar(15),
+    ItemId      varchar(64),
     ItemName    varchar(64)     NOT NULL,
+    ItemDesc    varchar(96)     NOT NULL,
     Owner       varchar(64)     DEFAULT "STORE" NOT NULL,
     Price       int             DEFAULT 0,
     PRIMARY KEY (ItemId)
 );
 
 CREATE TABLE storetags (
-    ItemId          varchar(15),
+    ItemId          varchar(64),
     TagName			varchar(64) NOT NULL,
     DisplayName     varchar(64) NOT NULL,
     DisplayColor    varchar(64) NOT NULL,
@@ -92,7 +96,7 @@ DROP VIEW IF EXISTS storeTopSounds;
 DROP VIEW IF EXISTS storeTopTrails;
 
 CREATE VIEW storeInventories AS
-SELECT P.SteamId, PI.ItemId, P.PlayerName, TA.TagName, S.SoundName, TR.TrailName, SI.ItemName
+SELECT P.SteamId, PI.ItemId, P.PlayerName, TA.TagName, TA.DisplayName, TA.DisplayColor, S.SoundName, S.SoundFile, S.Cooldown, TR.TrailName, TR.ModelIndex, SI.ItemName, SI.ItemDesc
 FROM storeplayers P
     JOIN storeplayeritems PI
         ON P.SteamId = PI.SteamId
@@ -110,13 +114,13 @@ SELECT ItemId, SoundName, TrailName, SUM(Buyers) TotalPurchased
 FROM ( 
     SELECT PL.ItemId, TA.DisplayName, S.SoundName, TR.TrailName, SI.ItemName, COUNT(DISTINCT PL.SteamId) Buyers
 		FROM storeplayeritems PL
-			JOIN storetags TA
+			LEFT JOIN storetags TA
 				ON PL.ItemId = TA.ItemId
-			JOIN storesounds S
+			LEFT JOIN storesounds S
 				ON PL.ItemId = S.ItemId
-			JOIN storetrails TR
+			LEFT JOIN storetrails TR
 				ON PL.ItemId = TR.ItemId
-            JOIN storeserveritems SI
+            LEFT JOIN storeserveritems SI
                 ON PL.ItemId = SI.ItemId
 	WHERE TA.Owner='STORE' OR S.Owner='STORE' OR TR.Owner='STORE' OR SI.Owner='STORE'
 ) AS ItemCount
@@ -168,7 +172,7 @@ delimiter $$
 CREATE TRIGGER storeGivePlayerDefaults AFTER INSERT ON storeplayers FOR EACH ROW
 BEGIN 
 	INSERT INTO storeplayergroups VALUES (NEW.SteamId, 1);
-    INSERT INTO storeplayeritems (SteamId, ItemId) VALUES (NEW.SteamId, "tag_news"), (NEW.SteamId, "tag_bgns"), (NEW.SteamId, "tag_ints"), (NEW.SteamId, "tag_exps"), (NEW.SteamId, "tag_msts"), (NEW.SteamId, "clr_smod");
+    INSERT INTO storeplayeritems (SteamId, ItemId) VALUES (NEW.SteamId, "tag_news"), (NEW.SteamId, "tag_bgns"), (NEW.SteamId, "tag_ints"), (NEW.SteamId, "tag_exps"), (NEW.SteamId, "tag_msts"), (NEW.SteamId, "tag_pirt"), (NEW.SteamId, "clr_srcm"), (NEW.SteamId, "snd_yarr"), (NEW.SteamId, "trl_pflg");
 END$$
 
 CREATE TRIGGER storeGiveItemsForSupporters AFTER INSERT ON storeplayergroups FOR EACH ROW
@@ -190,6 +194,21 @@ BEGIN
     IF (NEW.GroupNum = 4) THEN
 			INSERT INTO storeplayeritems VALUES (NEW.SteamId, "tag_vip", 1), (NEW.SteamId, "tag_dnte", 1), (NEW.SteamId, "tag_rich", 1), (NEW.SteamId, "srv_mpsm", 1), (NEW.SteamId, "srv_rank", 1), (NEW.SteamId, "srv_cnme", 1);
 	END IF;
+END$$
+
+CREATE TRIGGER storeGiveServerSoundItems AFTER INSERT ON storeplayeritems FOR EACH ROW
+BEGIN
+    IF (NEW.ItemId = 'srv_ssnd') THEN
+            INSERT INTO storeplayeritems VALUES (NEW.SteamId, "snd_srv_sting", 0), (NEW.SteamId, 'snd_srv_login', 0);
+    END IF;
+END$$
+
+CREATE TRIGGER storeRemoveServerSoundItems BEFORE DELETE ON storeplayeritems FOR EACH ROW
+BEGIN
+    IF (OLD.ItemId = 'srv_ssnd') THEN
+            DELETE FROM storeplayeritems WHERE SteamId=OLD.SteamId AND ItemId='snd_srv_sting';
+            DELETE FROM storeplayeritems WHERE SteamId=OLD.SteamId and ItemId='snd_srv_login';
+    END IF;
 END$$
 
 CREATE TRIGGER storeRemoveDonatorPerks BEFORE DELETE ON storeplayergroups FOR EACH ROW

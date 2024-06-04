@@ -3,11 +3,15 @@
 #include <string>
 #include <dbi>
 #include <files>
+#include <sdktools>
 #include <keyvalues>
+#include <tf2>
+
+#include <morecolors>
 
 public Plugin myinfo =
 {
-    name = "sntdb Map Module",
+    name = "sntdb Core Module",
     author = "Arcala the Gyiyg",
     description = "(required) SNTDB Core Module.",
     version = "1.0.0",
@@ -18,6 +22,7 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 {
 
     CreateNative("LoadSQLConfigs", ReadSQLConfigs);
+    CreateNative("LoadSQLStoreConfigs", ReadSQLStoreConfigs);
     RegPluginLibrary("sntdb_core");
 
     return APLRes_Success;
@@ -25,6 +30,8 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 
 /*
 TODO:
+    Player enter / leave messages.
+
     Add group verification function
     
     Events:
@@ -89,6 +96,8 @@ char CurrentHoliday[32] = "None";
 char CurrentEvent[32] = "None";
 int  TimeLeft;
 
+int PlayerJoined[MAXPLAYERS+1];
+
 // Convars
 ConVar EventCooldown;
 
@@ -118,32 +127,37 @@ public void OnPluginStart()
         ThrowError("[SNT] ERROR! COULD NOT LOAD CORE CONFIG");
     }  
 
-    PrintToServer("[SNT] Connecting to Database");
-    char error[255];
-    DB_sntdb = SQL_Connect(DBConfName, true, error, sizeof(error));
-    if (!StrEqual(error, ""))
-    {
-        ThrowError("[SNT] ERROR IN PLUGIN START: %s", error);
-    }
+    // PrintToServer("[SNT] Connecting to Database");
+    // char error[255];
+    // DB_sntdb = SQL_Connect(DBConfName, true, error, sizeof(error));
+    // if (!StrEqual(error, ""))
+    // {
+    //     ThrowError("[SNT] ERROR IN PLUGIN START: %s", error);
+    // }
+
+    HookEvent("player_team", OnPlayerTeam);
 
     EventCooldown = CreateConVar("snt_event_cooldown", "480", "The cooldown time in seconds between events.", 0, true, 300.0);
     
     RegAdminCmd("sm_snt_events",    ADM_OpenEventsMenu,      ADMFLAG_GENERIC,    "/snt_events: Use this to open the events menu.");
-    RegAdminCmd("sm_snt_etest",     ADM_TestPlugin,          ADMFLAG_GENERIC,    "test this bitch");
+    RegAdminCmd("sm_datetest",     ADM_TestPlugin,          ADMFLAG_GENERIC,    "test this bitch");
     //RegAdminCmd("sm_snt_groupmod",  ADM_ModGroup,           ADMFLAG_BAN,        "/snt_groupmod <gid> <user>: Toggle a user's group id. Type list with no user to list all groups");
 }
 
-public void OnMapStart()
+public void OnPlayerTeam(Event event, const char[] name, bool dontBroadcast)
 {
-    char CurrentMonth[8];
-    char CurrentDay[8];
-    char DayOfWeek[16];
-    FormatTime(CurrentMonth, sizeof(CurrentMonth), "%m");
-    FormatTime(CurrentDay, sizeof(CurrentDay), "%d");
-    FormatTime(DayOfWeek, sizeof(DayOfWeek), "%A"); 
+    int uid = GetEventInt(event, "userid");
+    int client = GetClientOfUserId(uid);
 
-    Weekend = CheckWeekend(DayOfWeek);
-    CheckHoliday(CurrentMonth, CurrentDay);
+    if (!IsFakeClient(client))
+    {
+        CreateTimer(5.0, Timer_WelcomeMessage, client);
+    }
+}
+
+public void OnClientDisconnect(int client)
+{
+    PlayerJoined[client] = 0;
 }
 
 bool CheckWeekend(char[] day)
@@ -204,111 +218,127 @@ int ReadSQLConfigs(Handle plugin, int numParams)
         return 0;
     }
 
-    int sysornot;
-    sysornot = GetNativeCell(1);
+    char ModuleName[32];
+    GetNativeString(7, ModuleName, sizeof(ModuleName));
+
+    if (!ConfigFile.JumpToKey("System"))
+    {
+        ThrowError("[SNT] ERROR! Missing \"System\" section from config file.");
+        delete ConfigFile;
+        return 0;
+    }
+    else
+    {
+        // Declare variables to store configs
+        char dbconfig_name[32];
+        char prefix[96];
+        char schema[64];
+        char store_schema[64];
+        
+        // Gather values from config file and store it in the variables.
+        ConfigFile.GetString("dbconfig", dbconfig_name, sizeof(dbconfig_name));
+        ConfigFile.GetString("message_prefix", prefix, sizeof(prefix));
+        ConfigFile.GetString("schema", schema, sizeof(schema));
+        if (GetNativeCell(8) == 1)
+        {
+            ConfigFile.GetString("store_schema", store_schema, sizeof(store_schema));
+        }
+
+
+        // Print values gathered to server.
+        PrintToServer("***********  SYSTEM  ************");
+        PrintToServer("[SNT] Called By: %s", ModuleName);
+        PrintToServer("[SNT] dbconfig: %s", dbconfig_name);
+        PrintToServer("[SNT] schema: %s", schema);
+
+        if (GetNativeCell(9) == 1)
+        {
+            PrintToServer("[SNT] store_schema: %s", store_schema);
+        }
+
+        PrintToServer("[SNT] prefix: %s", prefix);
+        PrintToServer("*********************************");
+        PrintToServer("");
+
+        // Return values back to the user through the function.
+        SetNativeString(1, dbconfig_name, GetNativeCell(2));
+        SetNativeString(3, prefix, GetNativeCell(4));
+        SetNativeString(5, schema, GetNativeCell(6));
+
+        if (GetNativeCell(8) == 1)
+        {
+            SetNativeString(9, store_schema, GetNativeCell(10));
+        }
+    }
+    return 1;
+}
+
+int ReadSQLStoreConfigs(Handle plugin, int numParams)
+{
+    PrintToServer("[SNT] Loading SQL configs");
+
+    KeyValues ConfigFile = new KeyValues("ConfigFile");
+    char ConfigFilePath[PLATFORM_MAX_PATH];
+    BuildPath(Path_SM, ConfigFilePath, sizeof(ConfigFilePath), "configs/sntdb/main_config.cfg");
 
     char ModuleName[32];
-    GetNativeString(8, ModuleName, sizeof(ModuleName));
+    GetNativeString(7, ModuleName, sizeof(ModuleName));
 
-    switch (sysornot)
+    ConfigFile.ImportFromFile(ConfigFilePath);
+    
+    if (ConfigFile == null)
     {
-        case 0:
-        {
-            if (!ConfigFile.JumpToKey("System"))
-            {
-                ThrowError("[SNT] ERROR! Missing \"System\" section from config file.");
-                delete ConfigFile;
-                return 0;
-            }
-            else
-            {
-                // Declare variables to store configs
-                char dbconfig_name[32];
-                char prefix[96];
-                char schema[64];
-                char store_schema[64];
-                
-                // Gather values from config file and store it in the variables.
-                ConfigFile.GetString("dbconfig", dbconfig_name, sizeof(dbconfig_name));
-                ConfigFile.GetString("message_prefix", prefix, sizeof(prefix));
-                ConfigFile.GetString("schema", schema, sizeof(schema));
-                if (GetNativeCell(9) == 1)
-                {
-                    ConfigFile.GetString("store_schema", store_schema, sizeof(store_schema));
-                }
+        ThrowError("[SNT] ERROR! \"configs/sntdb/main_config.cfg\": file does not exist!");
+        return 0;
+    }
 
+    if (!ConfigFile.JumpToKey("Store"))
+    {
+        ThrowError("[SNT] ERROR! Missing \"Store\" section from config file.");
+        delete ConfigFile;
+        return 0;
+    }
+    else
+    {
+        // Declare variables to store configs
+        char dbconfig_name[32];
+        char prefix[96];
+        char schema[64];
+        char currency[64];
+        char currencycolor[64];
+        int credits_given;
+        float over_time;
 
-                // Print values gathered to server.
-                PrintToServer("***********  SYSTEM  ************");
-                PrintToServer("[SNT] Called By:\t%s", ModuleName);
-                PrintToServer("[SNT] dbconfig:\t%s", dbconfig_name);
-                PrintToServer("[SNT] schema: %s", schema);
+        // Gather values from config file and store it in the variables.
+        ConfigFile.GetString("dbconfig", dbconfig_name, 32);
+        ConfigFile.GetString("message_prefix", prefix, 96);
+        ConfigFile.GetString("schema", schema, 64);
+        ConfigFile.GetString("currency_name", currency, 64);
+        ConfigFile.GetString("currency_color", currencycolor, 64);
+        credits_given = ConfigFile.GetNum("amount_given", 50);
+        over_time = ConfigFile.GetFloat("interval_in_mins", 15.0);
 
-                if (GetNativeCell(9) == 1)
-                {
-                    PrintToServer("[SNT] store_schema: %s", store_schema);
-                }
+        // Print values gathered to server.
+        PrintToServer("***********  Store  ************");
+        PrintToServer("[SNT] Called By: %s", ModuleName);
+        PrintToServer("[SNT] dbconfig: %s", dbconfig_name);
+        PrintToServer("[SNT] schema: %s", schema);
+        PrintToServer("[SNT] prefix: %s", prefix);
+        PrintToServer("[SNT] Credits To Give: %i", credits_given);
+        PrintToServer("[SNT] Time interval: %f", over_time);
+        PrintToServer("*********************************");
+        PrintToServer("");
 
-                PrintToServer("[SNT] prefix: %s", prefix);
-                PrintToServer("*********************************");
+        // Return values back to the user through the function.
+        SetNativeString(1, dbconfig_name, GetNativeCell(2));
+        SetNativeString(3, prefix, GetNativeCell(4));
+        SetNativeString(5, schema, GetNativeCell(6));
+        SetNativeString(8, currency, GetNativeCell(9));
+        SetNativeString(10, currencycolor, GetNativeCell(11));
+        SetNativeCellRef(12, credits_given);
+        SetNativeCellRef(13, over_time);
 
-                // Return values back to the user through the function.
-                SetNativeString(2, dbconfig_name, GetNativeCell(3));
-                SetNativeString(4, prefix, GetNativeCell(5));
-                SetNativeString(6, schema, GetNativeCell(7));
-
-                if (GetNativeCell(9) == 1)
-                {
-                    SetNativeString(10, store_schema, GetNativeCell(11));
-                }
-
-                delete ConfigFile;
-                return 1;
-            }
-        }
-        
-        case 1:
-        {
-            if (!ConfigFile.JumpToKey("Store"))
-            {
-                ThrowError("[SNT] ERROR! Missing \"System\" section from config file.");
-                delete ConfigFile;
-                return 0;
-            }
-            else
-            {
-                if (GetNativeCell(9) == 1)
-                {
-                    ThrowNativeError(1, "[SNT] You're using the store schema already!");
-                }
-                // Declare variables to store configs
-                char dbconfig_name[32];
-                char prefix[96];
-                char schema[64];
-
-                // Gather values from config file and store it in the variables.
-                ConfigFile.GetString("dbconfig", dbconfig_name, sizeof(dbconfig_name));
-                ConfigFile.GetString("message_prefix", prefix, sizeof(prefix));
-                ConfigFile.GetString("schema", schema, sizeof(schema));
-
-                // Print values gathered to server.
-                PrintToServer("***********  Store  ************");
-                PrintToServer("[SNT] Called By:\t%s", ModuleName);
-                PrintToServer("[SNT] dbconfig:\t%s", dbconfig_name);
-                PrintToServer("[SNT] schema: %s", schema);
-                PrintToServer("[SNT] prefix: %s", prefix);
-                PrintToServer("*********************************");
-                PrintToServer("");
-
-                // Return values back to the user through the function.
-                SetNativeString(2, dbconfig_name, GetNativeCell(3));
-                SetNativeString(4, prefix, GetNativeCell(5));
-                SetNativeString(6, schema, GetNativeCell(7));
-
-                delete ConfigFile;
-                return 1;
-            }
-        }
+        delete ConfigFile;
     }
     return 1;
 }
@@ -316,6 +346,63 @@ int ReadSQLConfigs(Handle plugin, int numParams)
 public int EventMenuHandler(Menu menu, MenuAction action, int param1, int param2)
 {
     return 0;
+}
+
+public Action Timer_WelcomeMessage(Handle timer, any data)
+{
+    char CurrentHour[4];
+    char CurrentMinute[4];
+    char AMPM[4];
+    char CurrentMonth[4];
+    char CurrentDay[4];
+    char DayOfWeek[16];
+
+    FormatTime(CurrentHour, 4, "%I", GetTime());
+    FormatTime(CurrentMinute, 4, "%M", GetTime());
+    FormatTime(AMPM, 4, "%p", GetTime());
+    FormatTime(CurrentMonth, 4, "%m", GetTime());
+    FormatTime(CurrentDay, 4, "%d", GetTime());
+    FormatTime(DayOfWeek, 16, "%A", GetTime());
+
+    int CESTHour = StringToInt(CurrentHour);
+    int ESTHour = StringToInt(CurrentHour);
+    int PSTHour = StringToInt(CurrentHour);
+    CESTHour += 2;
+    ESTHour -= 4;
+    PSTHour -= 7;
+
+    char CESTAMPM[4];
+    char ESTAMPM[4];
+    char PSTAMPM[4];
+
+    // if (CESTHour > StringToInt(CurrentHour) && StringToInt(CurrentHour) < 12 && StrEqual(AMPM, "AM"))
+    //     strcopy(CESTAMPM, 4, "PM");
+    // else if (CESTHour < StringToInt(CurrentHour) && StringToInt(CurrentHour) < 12 && StrEqual(AMPM, "PM"))
+    //     strcopy(CESTAMPM, 4, "AM");
+
+    // if (CESTHour > ESTHour && ESTHour < 12 && StrEqual(AMPM, "PM"))
+    //     strcopy(ESTAMPM, 4, "AM");
+    // else if (CESTHour > ESTHour && ESTHour < 12 && StrEqual(AMPM, "AM"))
+    //     strcopy(ESTAMPM, 4, "PM");
+
+    // if (ESTHour > PSTHour && PSTHour < 12 && StrEqual(AMPM, "PM"))
+    //     strcopy(PSTAMPM, 4, "AM");
+    // else if (ESTHour > PSTHour && PSTHour < 12 && StrEqual(AMPM, "AM"))
+    //     strcopy(PSTAMPM, 4, "PM");
+
+    CheckHoliday(CurrentMonth, CurrentDay);
+
+    if (PlayerJoined[data] != 1)
+    {
+        char PlayerName[128];
+        GetClientName(data, PlayerName, 128);
+        EmitSoundToClient(data, "snt_sounds/ypp_login.mp3");
+        CPrintToChat(data, "{yellowgreen}Ahoy! Welcome ye to the crew, {default}%s!", PlayerName);
+        CPrintToChat(data, "%s The date is: {orange}%s %s/%s", Prefix, DayOfWeek, CurrentMonth, CurrentDay);
+        //CPrintToChat(data, "The current time is {rblxlightblue}%i:%s %s CEST\n{yellowgreen}%i:%s %s EST, {orange}%i:%s %s PST", CESTHour, CurrentMinute, CESTAMPM, ESTHour, CurrentMinute, ESTAMPM, PSTHour, CurrentMinute, PSTAMPM);
+        PlayerJoined[data] = 1;
+    }
+    return Plugin_Continue;
 }
 
 public Action ADM_OpenEventsMenu(int client, int args)
@@ -355,15 +442,5 @@ public Action ADM_OpenEventsMenu(int client, int args)
 
 public Action ADM_TestPlugin(int client, int args)
 {
-    EventEnabled = !EventEnabled;
-    if (EventEnabled)
-    {
-        strcopy(CurrentEvent, sizeof(CurrentEvent), "Birthday");
-    }
-    else
-    {
-        strcopy(CurrentEvent, sizeof(CurrentEvent), "None");
-    }
-    PrintToServer("Done");
     return Plugin_Handled;
 }
