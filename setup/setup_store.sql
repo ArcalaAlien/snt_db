@@ -110,29 +110,29 @@ FROM storeplayers P
                 ON PI.ItemId = SI.ItemId;
 
 CREATE VIEW storeTopItems AS
-SELECT ItemId, SoundName, TrailName, SUM(Buyers) TotalPurchased
+SELECT ItemId, DisplayName, SoundName, TrailName, ItemName, SUM(Buyers) TotalPurchased
 FROM ( 
     SELECT PL.ItemId, TA.DisplayName, S.SoundName, TR.TrailName, SI.ItemName, COUNT(DISTINCT PL.SteamId) Buyers
-		FROM storeplayeritems PL
-			LEFT JOIN storetags TA
-				ON PL.ItemId = TA.ItemId
-			LEFT JOIN storesounds S
-				ON PL.ItemId = S.ItemId
-			LEFT JOIN storetrails TR
-				ON PL.ItemId = TR.ItemId
-            LEFT JOIN storeserveritems SI
-                ON PL.ItemId = SI.ItemId
+    FROM storeplayeritems PL
+        LEFT JOIN storetags TA
+            ON PL.ItemId = TA.ItemId
+        LEFT JOIN storesounds S
+            ON PL.ItemId = S.ItemId
+        LEFT JOIN storetrails TR
+            ON PL.ItemId = TR.ItemId
+        LEFT JOIN storeserveritems SI
+            ON PL.ItemId = SI.ItemId
 	WHERE TA.Owner='STORE' OR S.Owner='STORE' OR TR.Owner='STORE' OR SI.Owner='STORE'
 ) AS ItemCount
-GROUP BY ItemId, DisplayName, SoundName, TrailName;
+GROUP BY ItemId, DisplayName, SoundName, TrailName, ItemName;
 
 CREATE VIEW storeTopTags AS
 SELECT ItemId, SUM(Buyers) TotalPurchased
 FROM ( 
     SELECT PL.ItemId, TA.DisplayName, COUNT(DISTINCT PL.SteamId) Buyers
-		FROM storeplayeritems PL
-			JOIN storetags TA
-				ON PL.ItemId = TA.ItemId
+    FROM storeplayeritems PL
+        JOIN storetags TA
+            ON PL.ItemId = TA.ItemId
 	WHERE TA.Owner='STORE'
 ) AS TagCount
 GROUP BY ItemId, DisplayName;
@@ -141,9 +141,9 @@ CREATE VIEW storeTopSounds AS
 SELECT ItemId, SoundName, SUM(Buyers) TotalPurchased
 FROM ( 
     SELECT PL.ItemId, S.SoundName, COUNT(DISTINCT PL.SteamId) Buyers
-		FROM storeplayeritems PL
-			JOIN storesounds S
-				ON PL.ItemId = S.ItemId
+    FROM storeplayeritems PL
+        JOIN storesounds S
+            ON PL.ItemId = S.ItemId
 	WHERE S.Owner='STORE'
 ) AS SoundCount
 GROUP BY ItemId, SoundName;
@@ -152,9 +152,9 @@ CREATE VIEW storeTopTrails AS
 SELECT ItemId, TrailName, SUM(Buyers) TotalPurchased
 FROM ( 
     SELECT PL.ItemId, TR.TrailName, COUNT(DISTINCT PL.SteamId) Buyers
-		FROM storeplayeritems PL
-			JOIN storetrails TR
-				ON PL.ItemId = TR.ItemId
+    FROM storeplayeritems PL
+        JOIN storetrails TR
+            ON PL.ItemId = TR.ItemId
 	WHERE TR.Owner='STORE'
 ) AS TrailCount
 GROUP BY ItemId, TrailName;
@@ -199,7 +199,7 @@ END$$
 CREATE TRIGGER storeGiveServerSoundItems AFTER INSERT ON storeplayeritems FOR EACH ROW
 BEGIN
     IF (NEW.ItemId = 'srv_ssnd') THEN
-            INSERT INTO storeplayeritems VALUES (NEW.SteamId, "snd_srv_sting", 0), (NEW.SteamId, 'snd_srv_login', 0);
+            INSERT INTO storeplayeritems VALUES (NEW.SteamId, "snd_srv_sting", 0), (NEW.SteamId, 'snd_srv_login', 0), (NEW.SteamId, 'snd_mspam_warn1'), (NEW.SteamId, 'snd_mspam_warn2');
     END IF;
 END$$
 

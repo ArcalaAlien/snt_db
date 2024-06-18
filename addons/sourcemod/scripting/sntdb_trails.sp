@@ -348,11 +348,11 @@ void CreateTrail(int client)
     DispatchKeyValueFloat(ent_trail, "lifetime", 1.5);
     DispatchKeyValueFloat(ent_trail, "startwidth", EqpdTrail[client].Width);
     DispatchKeyValueFloat(ent_trail, "endwidth", EqpdTrail[client].Width);
-    DispatchKeyValue(ent_trail, "spritename", TrailVMT);
+    DispatchKeyValue(ent_trail, "spritename",TrailVMT);
     DispatchKeyValue(ent_trail, "rendercolor", RGBStr);
     DispatchKeyValue(ent_trail, "framerate", "30");
     DispatchKeyValue(ent_trail, "animate", "true");
-    DispatchKeyValueInt(ent_trail, "renderamt", 255);
+    DispatchKeyValueInt(ent_trail, "renderamt", Alpha);
     DispatchKeyValueInt(ent_trail, "rendermode", 5);
 
     char trail_name[16];
@@ -365,8 +365,6 @@ void CreateTrail(int client)
     }
 
     TeleportEntity(ent_trail, PlayerOrigin, NULL_VECTOR);
-
-    PrintToServer("[SNT] %i, %f, %s, %s, %i, %s", ent_trail, EqpdTrail[client].Width, TrailVMT, RGBStr, Alpha, trail_name);
 
     SetVariantString("!activator");
     AcceptEntityInput(ent_trail, "SetParent", client);
@@ -556,7 +554,7 @@ void SendEquipMenu_Native(Handle plugin, int params)
     GetClientAuthId(GetNativeCell(1), AuthId_Steam3, SteamId, 64);
 
     char sQuery[512];
-    Format(sQuery, 512, "SELECT ItemId, TrailName FROM %sInventories WHERE SteamId=\'%s\'", StoreSchema, SteamId);
+    Format(sQuery, 512, "SELECT ItemId, TrailName FROM %sInventories WHERE SteamId=\'%s\' ORDER BY TrailName ASC", StoreSchema, SteamId);
     SQL_TQuery(DB_sntdb, SQL_FillEquipMenu, sQuery, GetNativeCell(1));
 }
 
@@ -1038,7 +1036,7 @@ public int MainPage1_Handler(Menu menu, MenuAction action, int param1, int param
 
                     EmitSoundToClient(param1, "buttons/button14.wav");
                     char sQuery[512];
-                    Format(sQuery, 512, "SELECT ItemId, TrailName FROM %sInventories WHERE SteamId=\'%s\'", StoreSchema, SteamId);
+                    Format(sQuery, 512, "SELECT ItemId, TrailName FROM %sInventories WHERE SteamId=\'%s\' ORDER BY TrailName ASC", StoreSchema, SteamId);
                     SQL_TQuery(DB_sntdb, SQL_FillEquipMenu, sQuery, param1);
                 }
                 case 2:
@@ -1291,11 +1289,12 @@ public Action USR_OpenTrailMenu(int client, int args)
             GetCmdArg(2, Arg2, 18);
 
             EqpdTrail[client].StrToColor4(Arg2);
+            UpdateTrail(client);
         }
         else
         {
             EmitSoundToClient(client, "snt_sounds/ypp_sting.mp3");
-            CReplyToCommand(client, "{rblxreallyred} If ye want to change yer trail's color, do '/trail color r,g,b,a' or use '/trail' to visit the trail menu!");
+            CReplyToCommand(client, "{fullred} If ye want to change yer trail's color, do '/trail color r,g,b,a' or use '/trail' to visit the trail menu!");
         }
     }
     return Plugin_Handled;

@@ -5,7 +5,6 @@
 #include <dbi>
 #include <files>
 #include <keyvalues>
-#include <menu-stocks>
 
 // Third party includes
 #include <morecolors>
@@ -37,11 +36,11 @@ Database DB_sntdb;
 
 // Menus
 Menu Menu_RegularMaps;
-Menu Menu_WeedMaps;
+//Menu Menu_WeedMaps;
 
 // Arrays
 ArrayList AL_RegularMaps;
-ArrayList AL_WeedMaps;
+//ArrayList AL_WeedMaps;
 
 // Array Serials
 char MapSerialPath[PLATFORM_MAX_PATH];
@@ -61,32 +60,32 @@ public void OnPluginStart()
     DB_sntdb = SQL_Connect(DBConfName, true, error, sizeof(error));
     if (!StrEqual(error, ""))
     {
-        ThrowError("[SNT] ERROR IN PLUGIN START: %s", error);
+        PrintToServer("[SNT] ERROR IN PLUGIN START: %s", error);
     }
 
     BuildPath(Path_SM, MapSerialPath, sizeof(MapSerialPath), "configs/sntdb/maplist_serials.out");
 
     AL_RegularMaps = CreateArray(64);
-    AL_WeedMaps = CreateArray(64);
+    //AL_WeedMaps = CreateArray(64);
 
     Menu_RegularMaps = new Menu(MapsRatingHandler, MENU_ACTIONS_DEFAULT);
-    Menu_WeedMaps = new Menu(MapsRatingHandler, MENU_ACTIONS_DEFAULT);
+    //Menu_WeedMaps = new Menu(MapsRatingHandler, MENU_ACTIONS_DEFAULT);
 
     DataPack Reg_Pack;
-    DataPack Weed_Pack;
+    //DataPack Weed_Pack;
 
     Reg_Pack = CreateDataPack();
-    Weed_Pack = CreateDataPack();
+    //Weed_Pack = CreateDataPack();
     WritePackCell(Reg_Pack, Menu_RegularMaps);
     WritePackCell(Reg_Pack, 0);
-    WritePackCell(Weed_Pack, Menu_WeedMaps);
-    WritePackCell(Weed_Pack, 0);
+    //WritePackCell(Weed_Pack, Menu_WeedMaps);
+    //WritePackCell(Weed_Pack, 0);
 
     char sQuery[512];
     Format(sQuery, sizeof(sQuery), "SELECT MapName FROM %smaps WHERE EventId=\'evnt_none\'", SchemaName);
     SQL_TQuery(DB_sntdb, SQL_BuildMapMenu, sQuery, Reg_Pack);
-    Format(sQuery, sizeof(sQuery), "SELECT MapName FROM %smaps WHERE EventId=\'evnt_weed\'", SchemaName);
-    SQL_TQuery(DB_sntdb, SQL_BuildMapMenu, sQuery, Weed_Pack);
+    //Format(sQuery, sizeof(sQuery), "SELECT MapName FROM %smaps WHERE EventId=\'evnt_weed\'", SchemaName);
+    //SQL_TQuery(DB_sntdb, SQL_BuildMapMenu, sQuery, Weed_Pack);
 
     RegAdminCmd("sm_snt_buildtable",    ADM_BuildTables,        ADMFLAG_ROOT,       "/snt_buildtable: Use this to read a mapcycle.txt file and send all the map names to the database.");
     RegAdminCmd("sm_snt_syncmaps",      ADM_SyncMapMenus,       ADMFLAG_ROOT,       "/snt_syncmaps: Use this to sync the maplists with the database.");
@@ -94,7 +93,7 @@ public void OnPluginStart()
     RegConsoleCmd("sm_ratemaps",        USR_OpenRatingMenu,                         "/ratemaps: Use this to open the rating menu!")
     RegConsoleCmd("sm_ratemap",         USR_RateMap,                                "/ratemap: Use this to rate the current map!");
 
-    PrintToServer("[SNT] Registered Commands");
+    //PrintToServer("[SNT] Registered Commands");
 
     SQL_FillMapTable(DB_sntdb, 0);
 }
@@ -116,7 +115,7 @@ public int MapCategoriesHandler(Menu menu, MenuAction action, int param1, int pa
             }
             else if (StrEqual(MenuCategory, "evnt_weed"))
             {
-                Menu_WeedMaps.Display(param1, MENU_TIME_FOREVER);
+                //Menu_WeedMaps.Display(param1, MENU_TIME_FOREVER);
             }
         }
         case MenuAction_End:
@@ -224,7 +223,7 @@ public int RatingMenuHandler(Menu menu, MenuAction action, int param1, int param
         {
             if (param2 == MenuCancel_ExitBack)
             {
-                PrintToServer("Back button pressed");
+                //PrintToServer("Back button pressed");
             }
             else
             {
@@ -256,12 +255,12 @@ public int ReportMenuHandler(Menu menu, MenuAction action, int param1, int param
                 Menu UsrCatMenu = new Menu(MapCategoriesHandler, MENU_ACTIONS_DEFAULT);
                 UsrCatMenu.SetTitle("Choose a category!");
                 UsrCatMenu.AddItem("evnt_none", "Non-Event Maps");
-                UsrCatMenu.AddItem("evnt_weed", "420 Event Maps");
+                //UsrCatMenu.AddItem("evnt_weed", "420 Event Maps");
                 UsrCatMenu.Display(param1, 20);
             }
             else if (StrEqual(MenuChoice, "RATETHISMAP"))
             {
-                PrintToServer("[SNT] User chose to rate this map");
+                //PrintToServer("[SNT] User chose to rate this map");
                 char SteamId[64];
                 GetClientAuthId(param1, AuthId_Steam3, SteamId, sizeof(SteamId));
 
@@ -289,7 +288,7 @@ public int ReportMenuHandler(Menu menu, MenuAction action, int param1, int param
                 GetCurrentMap(CurrentMap, sizeof(CurrentMap));
                 SQL_EscapeString(DB_sntdb, CurrentMap, CurrentMapEsc, sizeof(CurrentMapEsc));
 
-                PrintToServer("[SNT] User wants to see this map's rating.");
+                //PrintToServer("[SNT] User wants to see this map's rating.");
                 DataPack MapInfo_Pack;
                 MapInfo_Pack = CreateDataPack();
                 MapInfo_Pack.WriteString(CurrentMapEsc);
@@ -301,16 +300,16 @@ public int ReportMenuHandler(Menu menu, MenuAction action, int param1, int param
             }
             else if (StrEqual(MenuChoice, "OTHERMAPINFO"))
             {
-                PrintToServer("[SNT] User wants to see other map's ratings.");
+                //PrintToServer("[SNT] User wants to see other map's ratings.");
                 Menu MapInfoCategory = new Menu(MapInfoCategoryHandler, MENU_ACTIONS_DEFAULT);
                 MapInfoCategory.SetTitle("Choose a category!");
                 MapInfoCategory.AddItem("evnt_none", "Non-Event Maps");
-                MapInfoCategory.AddItem("evnt_weed", "420 Event Maps");
+                //MapInfoCategory.AddItem("evnt_weed", "420 Event Maps");
                 MapInfoCategory.Display(param1, MENU_TIME_FOREVER);
             }
             else if (StrEqual(MenuChoice, "TOP10"))
             {
-                PrintToServer("[SNT] User wants to see the top 10 maps");
+                //PrintToServer("[SNT] User wants to see the top 10 maps");
                 Client_Pack.WriteCell(1);
                 char sQuery[1024];
                 Format(sQuery, sizeof(sQuery), "SELECT * FROM %sMapRatings ORDER BY Stars DESC LIMIT 10;", SchemaName);
@@ -318,7 +317,7 @@ public int ReportMenuHandler(Menu menu, MenuAction action, int param1, int param
             }
             else if (StrEqual(MenuChoice, "BOT10"))
             {
-                PrintToServer("[SNT] User wants to see the bottom 10 maps.");
+                //PrintToServer("[SNT] User wants to see the bottom 10 maps.");
                 Client_Pack.WriteCell(2);
                 char sQuery[1024];
                 Format(sQuery, sizeof(sQuery), "SELECT * FROM %sMapRatings ORDER BY Stars ASC LIMIT 10;", SchemaName);
@@ -342,18 +341,18 @@ public int MapInfoCategoryHandler(Menu menu, MenuAction action, int param1, int 
             char MenuChoice[32];
             menu.GetItem(param2, MenuChoice, sizeof(MenuChoice));
 
-            PrintToServer("MenuChoice: %s", MenuChoice);
+            //PrintToServer("MenuChoice: %s", MenuChoice);
 
             if (StrEqual(MenuChoice, "evnt_none"))
             {
-                PrintToServer("[SNT] Choice: Regular Maps");
+                //PrintToServer("[SNT] Choice: Regular Maps");
 
                 Menu InfoRegularMapList = new Menu(MapInfoHandler, MENU_ACTIONS_DEFAULT);
                 InfoRegularMapList.SetTitle("Choose a map to view!");
 
                 char sQuery[255];
                 Format(sQuery, sizeof(sQuery), "SELECT MapName FROM %smaps WHERE EventId=\'evnt_none\'", SchemaName);
-                PrintToServer("[SNT] Query Ran: %s", sQuery);
+                //PrintToServer("[SNT] Query Ran: %s", sQuery);
 
                 DataPack Client_Pack;
                 Client_Pack = CreateDataPack();
@@ -364,7 +363,7 @@ public int MapInfoCategoryHandler(Menu menu, MenuAction action, int param1, int 
             }
             else if (StrEqual(MenuChoice, "evnt_weed"))
             {
-                PrintToServer("[SNT] Choice: Weed Event Maps");
+                //PrintToServer("[SNT] Choice: Weed Event Maps");
                 Menu InfoWeedMapList = new Menu(MapInfoHandler, MENU_ACTIONS_DEFAULT);
                 InfoWeedMapList.SetTitle("Choose a map to view!");
 
@@ -375,7 +374,7 @@ public int MapInfoCategoryHandler(Menu menu, MenuAction action, int param1, int 
 
                 char sQuery[255];
                 Format(sQuery, sizeof(sQuery), "SELECT MapName FROM %smaps WHERE EventId=\'evnt_weed\'", SchemaName);
-                PrintToServer("[SNT] Query Ran: %s", sQuery);
+                //PrintToServer("[SNT] Query Ran: %s", sQuery);
                 
                 SQL_TQuery(DB_sntdb, SQL_BuildMapMenu, sQuery, Client_Pack);
             }
@@ -443,7 +442,7 @@ public void SQL_FillMapTable(Database db, int client)
             char MapNameEsc[129];
 
             AL_RegularMaps.GetString(i, MapName, sizeof(MapName));
-            PrintToServer("[SNT] MapName: %s", MapName);
+            //PrintToServer("[SNT] MapName: %s", MapName);
             SQL_EscapeString(db, MapName, MapNameEsc, sizeof(MapNameEsc));
             Format(iQuery, sizeof(iQuery), "INSERT INTO %smaps(MapName, EventId) VALUES (\'%s\', \'evnt_none\') ON DUPLICATE KEY UPDATE MapName=\'%s\'", SchemaName, MapNameEsc, MapNameEsc);
             SQL_TQuery(db, SQL_ErrorHandler, iQuery);
@@ -455,32 +454,32 @@ public void SQL_FillMapTable(Database db, int client)
         ReplyToCommand(client, "[SNT] No regular maps retrieved.");
     }
     
-    if (AL_WeedMaps)
-    {
-        ReadMapList(AL_WeedMaps, ReturnedSerials[1], "snt_weedmaps");
-        for (int i = 0; i < GetArraySize(AL_WeedMaps); i++)
-        {
-            char iQuery[512];
-            char MapName[64];
-            char MapNameEsc[129];
+    // if (AL_WeedMaps)
+    // {
+    //     ReadMapList(AL_WeedMaps, ReturnedSerials[1], "snt_weedmaps");
+    //     for (int i = 0; i < GetArraySize(AL_WeedMaps); i++)
+    //     {
+    //         char iQuery[512];
+    //         char MapName[64];
+    //         char MapNameEsc[129];
 
-            AL_WeedMaps.GetString(i, MapName, sizeof(MapName));
-            SQL_EscapeString(db, MapName, MapNameEsc, sizeof(MapNameEsc));
+    //         AL_WeedMaps.GetString(i, MapName, sizeof(MapName));
+    //         SQL_EscapeString(db, MapName, MapNameEsc, sizeof(MapNameEsc));
             
-            Format(iQuery, sizeof(iQuery), "INSERT INTO %smaps(MapName, EventId) VALUES (\'%s\', \'evnt_weed\') ON DUPLICATE KEY UPDATE MapName=\'%s\'", SchemaName, MapNameEsc, MapNameEsc);
-            SQL_TQuery(db, SQL_ErrorHandler, iQuery);
-        }
-        ReplyToCommand(client, "[SNT] %i weed maps retrieved.", GetArraySize(AL_WeedMaps));
-    }
-    else
-    {
-        ReplyToCommand(client, "[SNT] No weed maps retrieved.");
-    }
+    //         Format(iQuery, sizeof(iQuery), "INSERT INTO %smaps(MapName, EventId) VALUES (\'%s\', \'evnt_weed\') ON DUPLICATE KEY UPDATE MapName=\'%s\'", SchemaName, MapNameEsc, MapNameEsc);
+    //         SQL_TQuery(db, SQL_ErrorHandler, iQuery);
+    //     }
+    //     ReplyToCommand(client, "[SNT] %i weed maps retrieved.", GetArraySize(AL_WeedMaps));
+    // }
+    // else
+    // {
+    //     ReplyToCommand(client, "[SNT] No weed maps retrieved.");
+    // }
 }
 
 public void SQL_BuildMapMenu(Database db, DBResultSet results, const char[] error, any data)
 {
-    PrintToServer("[SNT] Running sql query to build map menu.");
+    //PrintToServer("[SNT] Running sql query to build map menu.");
 
     // Menu is passed through data
     if (db == null)
@@ -504,7 +503,6 @@ public void SQL_BuildMapMenu(Database db, DBResultSet results, const char[] erro
     CloseHandle(data);
 
     int MapCount;
-    int TotalRows;
 
     while (SQL_FetchRow(results))
     {
@@ -519,9 +517,8 @@ public void SQL_BuildMapMenu(Database db, DBResultSet results, const char[] erro
         SQL_FetchMoreResults(results);
     }
 
-    PrintToServer("[SNT] Total maps found: %i", MapCount);
-    TotalRows = SQL_GetRowCount(results)
-    PrintToServer("[SNT] Total rows in results: %i", TotalRows);
+    //PrintToServer("[SNT] Total maps found: %i", MapCount);
+    //PrintToServer("[SNT] Total rows in results: %i", TotalRows);
 
     if (client != 0)
         MapList.Display(client, MENU_TIME_FOREVER);
@@ -553,7 +550,7 @@ public void SQL_GetLastRatingForMenu(Database db, DBResultSet results, const cha
     if (SQL_FetchRow(results))
     {
         int LastRating = SQL_FetchInt(results, 0);
-        PrintToServer("[SNT] User's last rating was %i", LastRating);
+        //PrintToServer("[SNT] User's last rating was %i", LastRating);
         switch (LastRating)
         {
             case 0:
@@ -570,7 +567,7 @@ public void SQL_GetLastRatingForMenu(Database db, DBResultSet results, const cha
     }
     else
     {
-        PrintToServer("[SNT] Player has not voted for this map yet.");
+        //PrintToServer("[SNT] Player has not voted for this map yet.");
         RateMapMenu.AddItem("NO", "Last Rating: None", ITEMDRAW_DISABLED);
     }
 
@@ -630,13 +627,13 @@ public void SQL_Build10MapList(Database db, DBResultSet results, const char[] er
 
     while (SQL_FetchRow(results))
     {
-        PrintToServer(" [SNT] Found row")
+        //PrintToServer(" [SNT] Found row")
         if (SQL_MoreRows(results))
         {
             char MapName[64];
             SQL_FetchString(results, 0, MapName, sizeof(MapName));
             AddMenuItem(List10Menu, MapName, MapName);
-            PrintToServer("[SNT] Added Item: %s", MapName);
+            //PrintToServer("[SNT] Added Item: %s", MapName);
             SQL_FetchMoreResults(results);
         }
     }
@@ -667,12 +664,12 @@ public void SQL_GetMapInfo(Database db, DBResultSet results, const char[] error,
     ReadPackString(data, MapName, sizeof(MapName));
     client = ReadPackCell(data);
 
-    PrintToServer("[SNT] Getting Map Info");
-    PrintToServer("[SNT] Map Name: %s", MapName);
+    //PrintToServer("[SNT] Getting Map Info");
+    //PrintToServer("[SNT] Map Name: %s", MapName);
 
     if (SQL_FetchRow(results))
     {
-        PrintToServer("[SNT] Map Retrieved");
+        //PrintToServer("[SNT] Map Retrieved");
         float MapRating;
         int TotalVotes;
 
@@ -682,7 +679,7 @@ public void SQL_GetMapInfo(Database db, DBResultSet results, const char[] error,
 
         TotalVotes = SQL_FetchInt(results, 1);
         MapRating = SQL_FetchFloat(results, 2);
-        PrintToServer("*    RESULTS    *\nName: %s\nStars: %f\nNumVotes: %i", MapName, MapRating, TotalVotes);
+        //PrintToServer("*    RESULTS    *\nName: %s\nStars: %f\nNumVotes: %i", MapName, MapRating, TotalVotes);
 
         char FMapName[64];
         char FMapRating[64];
@@ -735,9 +732,7 @@ public void SQL_SubmitRating(Database db, DBResultSet results, const char[] erro
 
     SQL_EscapeString(db, MapName, MapNameEsc, sizeof(MapNameEsc));
 
-    PrintToServer("[SNT] VALUES TO SUBMIT: %s, %s, %i", SteamId, MapName, PlayerVote);
-
-    int RowCount;
+    //PrintToServer("[SNT] VALUES TO SUBMIT: %s, %s, %i", SteamId, MapName, PlayerVote);
 
     if (SQL_FetchRow(results))
     {
@@ -745,7 +740,7 @@ public void SQL_SubmitRating(Database db, DBResultSet results, const char[] erro
         SQL_FetchString(results, 1, SQL_MapName, sizeof(SQL_MapName));
         SQL_LastVote = SQL_FetchInt(results, 2);
 
-        PrintToServer("[SNT] Player vote is already in table.");
+        //PrintToServer("[SNT] Player vote is already in table.");
         char uPlyrMapQuery[255];
         char uMapQuery1[255];
         char uMapQuery2[255];
@@ -792,20 +787,20 @@ public void SQL_SubmitRating(Database db, DBResultSet results, const char[] erro
                 Format(uMapQuery2, sizeof(uMapQuery2), "UPDATE %smaps SET Rating5=Rating5+5 WHERE MapName=\'%s\'", SchemaName, MapNameEsc);
             }
         }
-        PrintToServer("[SNT] Query: %s", uPlyrMapQuery);
-        PrintToServer("[SNT] Query: %s", uMapQuery1);
-        PrintToServer("[SNT] Query: %s", uMapQuery2);
+        //PrintToServer("[SNT] Query: %s", uPlyrMapQuery);
+        //PrintToServer("[SNT] Query: %s", uMapQuery1);
+        //PrintToServer("[SNT] Query: %s", uMapQuery2);
 
         SQL_TQuery(DB_sntdb, SQL_ErrorHandler, uPlyrMapQuery);
         SQL_TQuery(DB_sntdb, SQL_ErrorHandler, uMapQuery1);
         SQL_TQuery(DB_sntdb, SQL_ErrorHandler, uMapQuery2);
 
         CPrintToChat(client, "%s Updated your rating for {greenyellow}%s {white}from {gold}%i {white}to {gold}%i {white}star(s)!", Prefix, MapName, SQL_LastVote, PlayerVote);
-        PrintToServer("[SNT] Updated player in table and updated maps table.");
+        //PrintToServer("[SNT] Updated player in table and updated maps table.");
     }
     else
     {
-        PrintToServer("[SNT] Player vote is not already in table.");
+        //PrintToServer("[SNT] Player vote is not already in table.");
         char iPlyrMapQuery[255];
         char uMapQuery[255];
         switch (PlayerVote)
@@ -836,16 +831,16 @@ public void SQL_SubmitRating(Database db, DBResultSet results, const char[] erro
                 Format(uMapQuery, sizeof(uMapQuery), "UPDATE %smaps SET Rating5=Rating5+5 WHERE MapName=\'%s\'", SchemaName, MapNameEsc);
             }
         }
-        PrintToServer("[SNT] Query: %s", iPlyrMapQuery);
-        PrintToServer("[SNT] Query: %s", uMapQuery);
+        //PrintToServer("[SNT] Query: %s", iPlyrMapQuery);
+        //PrintToServer("[SNT] Query: %s", uMapQuery);
 
         SQL_TQuery(DB_sntdb, SQL_ErrorHandler, iPlyrMapQuery);
         SQL_TQuery(DB_sntdb, SQL_ErrorHandler, uMapQuery);
 
         CPrintToChat(client, "%s You rated {greenyellow}%s {gold}%i {white}star(s)!", Prefix, MapName, PlayerVote);
-        PrintToServer("[SNT] Inserted player vote into table and updated maps table.");
+        //PrintToServer("[SNT] Inserted player vote into table and updated maps table.");
     }
-    PrintToServer("[SNT] %i maps found", RowCount);
+    //PrintToServer("[SNT] %i maps found", RowCount);
     CloseHandle(data);
 }
 
@@ -858,26 +853,26 @@ public Action ADM_BuildTables(int client, int args)
 public Action ADM_SyncMapMenus(int client, int args)
 {
     Menu_RegularMaps = null;
-    Menu_WeedMaps = null;
+    //Menu_WeedMaps = null;
 
     Menu_RegularMaps = new Menu(MapsRatingHandler, MENU_ACTIONS_DEFAULT);
-    Menu_WeedMaps = new Menu(MapsRatingHandler, MENU_ACTIONS_DEFAULT);
+    //Menu_WeedMaps = new Menu(MapsRatingHandler, MENU_ACTIONS_DEFAULT);
 
     DataPack Reg_Pack;
-    DataPack Weed_Pack;
+    //DataPack Weed_Pack;
     Reg_Pack = CreateDataPack();
-    Weed_Pack = CreateDataPack();
+    //Weed_Pack = CreateDataPack();
     WritePackCell(Reg_Pack, Menu_RegularMaps);
     WritePackCell(Reg_Pack, client);
-    WritePackCell(Weed_Pack, Menu_WeedMaps);
-    WritePackCell(Weed_Pack, client);
+    //WritePackCell(Weed_Pack, Menu_WeedMaps);
+    //WritePackCell(Weed_Pack, client);
 
-    char sQuery1[512];
-    char sQuery2[512];
+    char sQuery1[256];
+    //char sQuery2[256];
     Format(sQuery1, sizeof(sQuery1), "SELECT MapName FROM %smaps WHERE EventId=\'evnt_none\'", SchemaName);
-    Format(sQuery2, sizeof(sQuery2), "SELECT MapName FROM %smaps WHERE EventId=\'evnt_weed\'", SchemaName);
+    //Format(sQuery2, sizeof(sQuery2), "SELECT MapName FROM %smaps WHERE EventId=\'evnt_weed\'", SchemaName);
     SQL_TQuery(DB_sntdb, SQL_BuildMapMenu, sQuery1, Reg_Pack);
-    SQL_TQuery(DB_sntdb, SQL_BuildMapMenu, sQuery2, Weed_Pack);
+    //SQL_TQuery(DB_sntdb, SQL_BuildMapMenu, sQuery2, Weed_Pack);
 
     return Plugin_Handled;
 }

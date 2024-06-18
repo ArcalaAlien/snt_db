@@ -465,7 +465,7 @@ void BuildPage1Store(int client)
     StoreMainPanel.DrawItem("Purchase Trails");
     StoreMainPanel.DrawItem("Purchase Server Items");
     StoreMainPanel.DrawItem("Color Previewer");
-    StoreMainPanel.DrawItem("Top 10s!");
+    // StoreMainPanel.DrawItem("Top 10s!");
     StoreMainPanel.DrawText(" ");
     StoreMainPanel.DrawItem("Exit");
     StoreMainPanel.Send(client, Store_Page1Handler, 10);
@@ -499,7 +499,7 @@ void BuildPage1Store_Native(Handle plugin, int numParams)
     StoreMainPanel.DrawItem("Purchase Trails");
     StoreMainPanel.DrawItem("Purchase Server Items");
     StoreMainPanel.DrawItem("Color Previewer");
-    StoreMainPanel.DrawItem("Top 10s!");
+    // StoreMainPanel.DrawItem("Top 10s!");
     StoreMainPanel.DrawText(" ");
     StoreMainPanel.DrawItem("Exit");
     StoreMainPanel.Send(client, Store_Page1Handler, 10);
@@ -567,6 +567,18 @@ void BuildPage1Inventory_Native(Handle plugin, int numParams)
     InvMainPanel.Send(client, Inv_Page1Handler, 10);
 }
 
+// void BuildTop10sPage(int client)
+// {
+//     Menu Top10Cats = new Menu(Top10Categories_Handler, MENU_ACTIONS_DEFAULT);
+//     Top10Cats.SetTitle("Choose a category:");
+//     Top10Cats.AddItem("1", "Top 10 All Items Bought");
+//     Top10Cats.AddItem("2", "Top 10 Tags Bought");
+//     Top10Cats.AddItem("3", "Top 10 Sounds Bought");
+//     Top10Cats.AddItem("4", "Top 10 Trails Bought");
+//     Top10Cats.AddItem("5", "Top 10 Server Items Bought");
+//     Top10Cats.Display(client, 0);
+// }
+
 public int Store_Page1Handler(Menu menu, MenuAction action, int param1, int param2)
 {
     switch(action)
@@ -586,31 +598,29 @@ public int Store_Page1Handler(Menu menu, MenuAction action, int param1, int para
                     BuildPage1Inventory(param1);
                 case 2:
                 {
-                    Format(sQuery, 512, "SELECT Price, ItemId, TagName FROM %stags WHERE Owner=\'STORE\' AND LEFT(ItemId, 4)=\'tag_\' ORDER BY Price ASC", StoreSchema);
+                    Format(sQuery, 512, "SELECT Price, ItemId, TagName FROM %stags WHERE Owner=\'STORE\' AND LEFT(ItemId, 4)=\'tag_\' ORDER BY Price, TagName ASC", StoreSchema);
                     Client_Info.WriteCell(1);
                 }
                 case 3:
                 {
-                    Format(sQuery, 512, "SELECT Price, ItemId, SoundName FROM %ssounds WHERE Owner=\'STORE\' AND LEFT(ItemId, 4)=\'snd_\' ORDER BY Price ASC", StoreSchema);
+                    Format(sQuery, 512, "SELECT Price, ItemId, SoundName FROM %ssounds WHERE Owner=\'STORE\' AND LEFT(ItemId, 4)=\'snd_\' ORDER BY Price, SoundName ASC", StoreSchema);
                     Client_Info.WriteCell(2);
                 }
                 case 4:
                 {
-                    Format(sQuery, 512, "SELECT Price, ItemId, TrailName FROM %strails WHERE Owner=\'STORE\' AND LEFT(ItemId, 4)=\'trl_\' ORDER BY Price ASC", StoreSchema);
+                    Format(sQuery, 512, "SELECT Price, ItemId, TrailName FROM %strails WHERE Owner=\'STORE\' AND LEFT(ItemId, 4)=\'trl_\' ORDER BY Price, TrailName ASC", StoreSchema);
                     Client_Info.WriteCell(3);
                 }
                 case 5:
                 {
-                    Format(sQuery, 512, "SELECT Price, ItemId, ItemName, ItemDesc FROM %sserveritems WHERE Owner=\'STORE\' AND LEFT(ItemId, 4)=\'srv_\' ORDER BY Price ASC", StoreSchema);
+                    Format(sQuery, 512, "SELECT Price, ItemId, ItemName, ItemDesc FROM %sserveritems WHERE Owner=\'STORE\' AND LEFT(ItemId, 4)=\'srv_\' ORDER BY Price, ItemName ASC", StoreSchema);
                     Client_Info.WriteCell(4);
                 }
                 case 6:
                     Color_SendPage1(param1);
+                // case 7:
+                //     BuildTop10sPage(param1);
                 case 7:
-                {
-                    PrintToServer("Player wants to vew top 10s");
-                }
-                case 8:
                 {
                     EmitSoundToClient(param1, "buttons/combine_button7.wav");
                     delete menu;
@@ -645,25 +655,25 @@ public int Inv_Page1Handler(Menu menu, MenuAction action, int param1, int param2
             {
                 case 1:
                 {
-                    Format(sQuery, 512, "SELECT ItemId, TagName FROM %sInventories WHERE SteamId=\'%s\' AND LEFT(ItemId, 4)=\'tag_\'", StoreSchema, SteamId);
+                    Format(sQuery, 512, "SELECT ItemId, TagName FROM %sInventories WHERE SteamId=\'%s\' AND LEFT(ItemId, 4)=\'tag_\' ORDER BY TagName ASC", StoreSchema, SteamId);
                     Client_Info.WriteCell(1);
                     SQL_TQuery(DB_sntdb, SQL_FillInvMenu, sQuery, Client_Info);
                 }
                 case 2:
                 {
-                    Format(sQuery, 512, "SELECT ItemId, SoundName FROM %sInventories WHERE SteamId=\'%s\' AND LEFT(ItemId, 4)=\'snd_\'", StoreSchema, SteamId);
+                    Format(sQuery, 512, "SELECT ItemId, SoundName FROM %sInventories WHERE SteamId=\'%s\' AND LEFT(ItemId, 4)=\'snd_\' ORDER BY SoundName ASC", StoreSchema, SteamId);
                     Client_Info.WriteCell(2);
                     SQL_TQuery(DB_sntdb, SQL_FillInvMenu, sQuery, Client_Info);
                 }
                 case 3:
                 {
-                    Format(sQuery, 512, "SELECT ItemId, TrailName FROM %sInventories WHERE SteamId=\'%s\' AND LEFT(ItemId, 4)=\'trl_\'", StoreSchema, SteamId);
+                    Format(sQuery, 512, "SELECT ItemId, TrailName FROM %sInventories WHERE SteamId=\'%s\' AND LEFT(ItemId, 4)=\'trl_\' ORDER BY TrailName ASC", StoreSchema, SteamId);
                     Client_Info.WriteCell(3);
                     SQL_TQuery(DB_sntdb, SQL_FillInvMenu, sQuery, Client_Info);
                 }
                 case 4:
                 {
-                    Format(sQuery, 512, "SELECT ItemId, ItemName, ItemDesc FROM %sInventories WHERE SteamId=\'%s\' AND LEFT(ItemId, 4)=\'srv_\'", StoreSchema, SteamId);
+                    Format(sQuery, 512, "SELECT ItemId, ItemName, ItemDesc FROM %sInventories WHERE SteamId=\'%s\' AND LEFT(ItemId, 4)=\'srv_\' ORDER BY ItemName ASC", StoreSchema, SteamId);
                     Client_Info.WriteCell(4);
                     SQL_TQuery(DB_sntdb, SQL_FillInvMenu, sQuery, Client_Info);
                 }
@@ -847,7 +857,7 @@ public int InfoPanel_Handler(Menu menu, MenuAction action, int param1, int param
                             Category_Info.WriteCell(param1);
                             Category_Info.WriteCell(1);
 
-                            Format(sQuery, 512, "SELECT Price, ItemId, TagName FROM %stags", StoreSchema);
+                            Format(sQuery, 512, "SELECT Price, ItemId, TagName FROM %stags ORDER BY Price, TagName ASC", StoreSchema);
                             SQL_TQuery(DB_sntdb, SQL_FillItemMenu, sQuery, Category_Info);
                         }
                         case 4:
@@ -893,7 +903,7 @@ public int InfoPanel_Handler(Menu menu, MenuAction action, int param1, int param
                             Category_Info.WriteCell(param1);
                             Category_Info.WriteCell(2);
 
-                            Format(sQuery, 512, "SELECT Price, ItemId, SoundName, Cooldown FROM %ssounds", StoreSchema);
+                            Format(sQuery, 512, "SELECT Price, ItemId, SoundName, Cooldown FROM %ssounds ORDER BY Price, SoundName ASC", StoreSchema);
                             SQL_TQuery(DB_sntdb, SQL_FillItemMenu, sQuery, Category_Info);
                         }
                         case 4:
@@ -931,7 +941,7 @@ public int InfoPanel_Handler(Menu menu, MenuAction action, int param1, int param
                             Category_Info.WriteCell(param1);
                             Category_Info.WriteCell(3);
 
-                            Format(sQuery, 512, "SELECT Price, ItemId, TrailName FROM %strails", StoreSchema);
+                            Format(sQuery, 512, "SELECT Price, ItemId, TrailName FROM %strails ORDER BY Price, TrailName ASC", StoreSchema);
                             SQL_TQuery(DB_sntdb, SQL_FillItemMenu, sQuery, Category_Info);
                         }
                         case 3:
@@ -953,7 +963,7 @@ public int InfoPanel_Handler(Menu menu, MenuAction action, int param1, int param
                                 if(!Player[param1].GetOwnsNameColor() || !Player[param1].GetOwnsChatColor())
                                 {
                                     EmitSoundToClient(param1, "snt_sounds/ypp_sting.mp3");
-                                    CPrintToChat(param1, "{rblxreallyred}Ye have ta buy chat or name colors from the tavern first!\n{default}Use {greenyellow}/tavern {default}to see their wares!", Prefix);
+                                    CPrintToChat(param1, "{fullred}Ye have ta buy chat or name colors from the tavern first!\n{default}Use {greenyellow}/tavern {default}to see their wares!", Prefix);
                                     return 0;
                                 }
                             }
@@ -974,7 +984,7 @@ public int InfoPanel_Handler(Menu menu, MenuAction action, int param1, int param
                             Category_Info.WriteCell(param1);
                             Category_Info.WriteCell(1);
 
-                            Format(sQuery, 512, "SELECT Price, ItemId, ItemName, ItemDesc FROM %sserveritems", StoreSchema);
+                            Format(sQuery, 512, "SELECT Price, ItemId, ItemName, ItemDesc FROM %sserveritems ORDER BY Price, ItemName ASC", StoreSchema);
                             SQL_TQuery(DB_sntdb, SQL_FillItemMenu, sQuery, Category_Info);
                         }
                         case 3:
@@ -1202,7 +1212,7 @@ public int ECatMenu_Handler(Menu menu, MenuAction action, int param1, int param2
                     else
                     {
                         EmitSoundToClient(param1, "snt_sounds/ypp_sting.mp3");
-                        CPrintToChat(param1, "{rblxreallyred}Ye have ta buy name colors from the tavern first!\n{default}Use {greenyellow}/tavern {default}to see their wares!", Prefix);
+                        CPrintToChat(param1, "{fullred}Ye have ta buy name colors from the tavern first!\n{default}Use {greenyellow}/tavern {default}to see their wares!", Prefix);
                         return 0;
                     }
                 }
@@ -1221,7 +1231,7 @@ public int ECatMenu_Handler(Menu menu, MenuAction action, int param1, int param2
                     else
                     {
                         EmitSoundToClient(param1, "snt_sounds/ypp_sting.mp3");
-                        CPrintToChat(param1, "{rblxreallyred}Ye have ta buy chat colors from the tavern first!\n{default}Use {greenyellow}/tavern {default}to see their wares!", Prefix);
+                        CPrintToChat(param1, "{fullred}Ye have ta buy chat colors from the tavern first!\n{default}Use {greenyellow}/tavern {default}to see their wares!", Prefix);
                         return 0;
                     }
                 }
@@ -1256,11 +1266,11 @@ public Action Timer_AddCredits(Handle timer, DataPack pack)
             if (GetClientCount() <= 12)
             {
                 CreditsGiven += (CFG_CreditsToGive/2);
-                CPrintToChat(client, "%s {greenyellow}%i %s%s {default}have been put in yer coffers!\n{greenyellow}Thanks fer recruitin' more crewmates!", Prefix, CreditsGiven, CurrencyColor, CurrencyName);
+                CPrintToChat(client, "%s %s%i %s {default}have been put in yer coffers!\n{greenyellow}Thanks fer recruitin' more crewmates!", Prefix, CurrencyColor, CreditsGiven, CurrencyName);
             }
             else
             {
-                CPrintToChat(client, "%s {greenyellow}%i %s%s {default}have been put in yer coffers!", Prefix, CreditsGiven, CurrencyColor, CurrencyName);
+                CPrintToChat(client, "%s %s%i %s {default}have been put in yer coffers!", Prefix, CurrencyColor, CreditsGiven, CurrencyName);
             }
         }
         case 1:
@@ -1269,11 +1279,11 @@ public Action Timer_AddCredits(Handle timer, DataPack pack)
             if (GetClientCount() <= 12)
             {
                 CreditsGiven += (CFG_CreditsToGive/2);
-                CPrintToChat(client, "%s {greenyellow}%i %s%s {default}have been put in yer coffers!\n{greenyellow}Thanks fer recruitin' more crewmates!", Prefix, CreditsGiven, CurrencyColor, CurrencyName);
+                CPrintToChat(client, "%s %s%i %s {default}have been put in yer coffers!\n{greenyellow}Thanks fer recruitin' more crewmates!", Prefix, CurrencyColor, CreditsGiven, CurrencyName);
             }
             else
             {
-                CPrintToChat(client, "%s {greenyellow}%i %s%s {default}have been put in yer coffers!", Prefix, CreditsGiven, CurrencyColor, CurrencyName);
+                CPrintToChat(client, "%s %s%i %s {default}have been put in yer coffers!", Prefix, CurrencyColor, CreditsGiven, CurrencyName);
             }
         }
     }
@@ -1720,7 +1730,7 @@ public void SQL_BuyItem(Database db, DBResultSet results, const char[] error, an
                 if (SQL_Price > Player[client].GetCredits())
                 {
                     EmitSoundToClient(client, "snt_sounds/ypp_sting.mp3");
-                    CPrintToChat(client, "{rblxreallyred}Sorry matey! Ye don't have enough dubloons fer that!");
+                    CPrintToChat(client, "{fullred}Sorry matey! Ye don't have enough dubloons fer that!");
                     break;
                 }
                 else
@@ -1764,7 +1774,7 @@ public void SQL_IsItemAlreadyOwned(Database db, DBResultSet results, const char[
         if (StrEqual(SQL_ItemId, ItemId))
         {
             EmitSoundToClient(client, "snt_sounds/ypp_sting.mp3");
-            CPrintToChat(client, "{rblxreallyred}Ye already own that item! Check yer {greenyellow}/treasure {rblxreallyred}for more info!");
+            CPrintToChat(client, "{fullred}Ye already own that item! Check yer {greenyellow}/treasure {fullred}for more info!");
             break;
         }
         else if (!StrEqual(SQL_ItemId, ItemId) && !SQL_MoreRows(results))
@@ -2351,7 +2361,7 @@ public int ColorPage2_Handler(Menu menu, MenuAction action, int param1, int para
                 if (!Player[param1].GetOwnsNameColor())
                 {
                     EmitSoundToClient(param1, "snt_sounds/ypp_sting.mp3");
-                    CPrintToChat(param1, "{rblxreallyred}Ye have ta buy chat colors from the tavern first!\n{default}Use {greenyellow}/tavern {default}to see their wares!", Prefix);
+                    CPrintToChat(param1, "{fullred}Ye have ta buy chat colors from the tavern first!\n{default}Use {greenyellow}/tavern {default}to see their wares!", Prefix);
                     return 0;
                 }
                 switch (StringToInt(SplitOption[1]))
@@ -2365,7 +2375,7 @@ public int ColorPage2_Handler(Menu menu, MenuAction action, int param1, int para
                         if (!Player[param1].GetOwnsRblxColors())
                         {
                             EmitSoundToClient(param1, "snt_sounds/ypp_sting.mp3");
-                            CPrintToChat(param1, "{rblxreallyred}Ye have ta buy roblox colors from the tavern first!\n{default}Use {greenyellow}/tavern {default}to see their wares!", Prefix);
+                            CPrintToChat(param1, "{fullred}Ye have ta buy roblox colors from the tavern first!\n{default}Use {greenyellow}/tavern {default}to see their wares!", Prefix);
                             return 0;
                         }
                         BuildColorPage3(param1, "ENAME", 1);
@@ -2381,7 +2391,7 @@ public int ColorPage2_Handler(Menu menu, MenuAction action, int param1, int para
                 if (!Player[param1].GetOwnsChatColor())
                 {
                     EmitSoundToClient(param1, "snt_sounds/ypp_sting.mp3");
-                    CPrintToChat(param1, "{rblxreallyred}Ye have ta buy chat colors from the tavern first!\n{default}Use {greenyellow}/tavern {default}to see their wares!", Prefix);
+                    CPrintToChat(param1, "{fullred}Ye have ta buy chat colors from the tavern first!\n{default}Use {greenyellow}/tavern {default}to see their wares!", Prefix);
                     return 0;
                 }
                 switch (StringToInt(SplitOption[1]))
@@ -2395,7 +2405,7 @@ public int ColorPage2_Handler(Menu menu, MenuAction action, int param1, int para
                         if (!Player[param1].GetOwnsRblxColors())
                         {
                             EmitSoundToClient(param1, "snt_sounds/ypp_sting.mp3");
-                            CPrintToChat(param1, "{rblxreallyred}Ye have ta buy roblox colors from the tavern first!\n{default}Use {greenyellow}/tavern {default}to see their wares!", Prefix);
+                            CPrintToChat(param1, "{fullred}Ye have ta buy roblox colors from the tavern first!\n{default}Use {greenyellow}/tavern {default}to see their wares!", Prefix);
                             return 0;
                         }
                         BuildColorPage3(param1, "ETEXT", 1);
@@ -2468,15 +2478,15 @@ public int ColorPage3_Handler(Menu menu, MenuAction action, int param1, int para
             {
                 case 0:
                 {
-                    Format(sQuery, 196, "SELECT * FROM %scolors WHERE PackName=\'DEFAULT\' AND ColorType=\'%s\'", StoreSchema, SplitOption[2]);
+                    Format(sQuery, 196, "SELECT * FROM %scolors WHERE PackName=\'DEFAULT\' AND ColorType=\'%s\' ORDER BY ColorName ASC", StoreSchema, SplitOption[2]);
                 }
                 case 1:
                 {
-                    Format(sQuery, 196, "SELECT * FROM %scolors WHERE PackName=\'ROBLOX\' AND ColorType=\'%s\'", StoreSchema, SplitOption[2]);
+                    Format(sQuery, 196, "SELECT * FROM %scolors WHERE PackName=\'ROBLOX\' AND ColorType=\'%s\' ORDER BY ColorName ASC", StoreSchema, SplitOption[2]);
                 }
                 case 2:
                 {
-                    Format(sQuery, 196, "SELECT * FROM %scolors WHERE PackName=\'VVVVVV\' AND ColorType=\'%s\'", StoreSchema, SplitOption[2]);
+                    Format(sQuery, 196, "SELECT * FROM %scolors WHERE PackName=\'VVVVVV\' AND ColorType=\'%s\' ORDER BY ColorName ASC", StoreSchema, SplitOption[2]);
                 }
             }
             DataPack Color_Info = CreateDataPack();

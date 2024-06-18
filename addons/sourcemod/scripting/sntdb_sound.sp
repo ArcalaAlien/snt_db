@@ -62,7 +62,6 @@ enum struct SoundSlots
     bool OwnsDeathItem;
     bool OwnsSpectatorItem;
     bool ConnectSoundsEnabled;
-    bool ChatSoundsEnabled;
 
     void SetSlotId(int slot, const char[] sound_id)
     {
@@ -147,11 +146,6 @@ enum struct SoundSlots
             case 2:
                 this.OwnsSpectatorItem = owns;
         }
-    }
-
-    void SetChatEnabled(bool enabled)
-    {
-        this.ChatSoundsEnabled = enabled;
     }
 
     void SetConnectEnabled(bool enabled)
@@ -254,11 +248,6 @@ enum struct SoundSlots
         return false;
     }
 
-    bool GetIsChatEnabled()
-    {
-        return this.ChatSoundsEnabled;
-    }
-
     bool GetIsConnEnabled()
     {
         return this.ConnectSoundsEnabled;
@@ -286,7 +275,6 @@ enum struct SoundSlots
         this.Slot2Cooldown = 2.0;
         this.Slot3Cooldown = 2.0;
         this.OwnsConnectItem = false;
-        this.ChatSoundsEnabled = true;
         this.ConnectSoundsEnabled = true;
     }
 }
@@ -345,7 +333,6 @@ Cookie ck_DeathSoundId;
 Cookie ck_DeathSoundName;
 Cookie ck_DeathSoundFile;
 
-Cookie ck_ChatSoundsEnabled;
 Cookie ck_ConnectionSoundsEnabled;
 
 public void OnPluginStart()
@@ -357,7 +344,7 @@ public void OnPluginStart()
     DB_sntdb = SQL_Connect(DBConfName, true, error, sizeof(error));
     if (!StrEqual(error, ""))
     {
-        ThrowError("[SNT] ERROR IN STORE PLUGIN START: %s", error);
+        PrintToServer("[SNT] ERROR IN STORE PLUGIN START: %s", error);
     }
 
     HookEvent("player_death", OnPlayerDeath);
@@ -389,7 +376,6 @@ public void OnPluginStart()
     ck_DeathSoundName = RegClientCookie("death_sound_name", "The equipped sound name for when the user disconencts from the server.", CookieAccess_Protected);
     ck_DeathSoundFile = RegClientCookie("death_sound_file", "The sound file of the sound the user has equipped.", CookieAccess_Protected);
 
-    ck_ChatSoundsEnabled = RegClientCookie("chat_sounds", "Does the user have chat sounds enabled?", CookieAccess_Protected);
     ck_ConnectionSoundsEnabled = RegClientCookie("connection_sounds", "Does the user have connection sounds enabled?", CookieAccess_Protected);
 
     RegConsoleCmd("sm_sounds", USR_OpenSoundSettings, "Usage: Use this to open the sound menu to adjust various settings!");
@@ -488,26 +474,6 @@ public void OnPlayerDeath(Event event, const char[] name, bool dontBroadcast)
     }
 }
 
-// public Action CP_OnChatMessage(int& author, ArrayList recepients, char[] flagstring, char[] name, char[] message, bool& processcolors, bool& removecolors)
-// {
-//     if (!IsChtCooldown[author] && PlayerSounds[author].GetIsChatEnabled())
-//     {
-//         IsChtCooldown[author] = true;
-//         DataPack Message_Info = CreateDataPack();
-//         Message_Info.WriteCell(author);
-//         Message_Info.WriteString(message);
-        
-//         char sQuery[512];
-//         Format(sQuery, 512, "SELECT SoundName, SoundFile FROM %ssounds", StoreSchema);
-//         SQL_TQuery(DB_sntdb, SQL_CheckForChatSound, sQuery, Message_Info);
-//     }
-//     else if (IsChtCooldown[author])
-//     {
-//         CPrintToChat(author, "{rblxreallyred}Yer sound is on cooldown and won't be played!");
-//     }
-//     return Plugin_Changed;
-// }
-
 void BuildSoundPanel(int client)
 {
     Panel SoundPanel = CreatePanel();
@@ -552,9 +518,6 @@ void BuildSettingsPanel(int client)
 {
     Panel SettingsCategory = CreatePanel();
     SettingsCategory.SetTitle("Choose a setting:");
-    //(PlayerSounds[client].GetIsChatEnabled()) ? SettingsCategory.DrawText("Current: Enabled") : SettingsCategory.DrawText("Current: Disabled");
-    //SettingsCategory.DrawItem("Toggle Chat Sounds");
-    //SettingsCategory.DrawText(" ");
     (PlayerSounds[client].GetIsConnEnabled()) ? SettingsCategory.DrawText("Current: Enabled") : SettingsCategory.DrawText("Current: Disabled");
     SettingsCategory.DrawItem("Toggle Connect Sounds");
     SettingsCategory.DrawText(" ");
@@ -798,26 +761,6 @@ void GetSlotCookies(int client, int slot)
                     PlayerSounds[client].SetSlotFile(5, cookieSF);
             }
 
-            // Chat sounds enabled
-            case 6:
-            {
-                char SoundsEnabled[8];
-                GetClientCookie(client, ck_ChatSoundsEnabled, SoundsEnabled, 8);
-
-                if (StrEqual(SoundsEnabled, ""))
-                {
-                    SetClientCookie(client, ck_ChatSoundsEnabled, "true");
-                    PlayerSounds[client].SetChatEnabled(true);
-                }
-                else
-                {
-                    if (StrEqual(SoundsEnabled, "true"))
-                        PlayerSounds[client].SetChatEnabled(true);
-                    else
-                        PlayerSounds[client].SetChatEnabled(false);
-                }
-            }
-
             // Connect sounds enabled
             case 7:
             {
@@ -929,11 +872,6 @@ void SetSlotCookies(int client, int slot)
                 SetClientCookie(client, ck_DeathSoundName, cookieSN);
                 SetClientCookie(client, ck_DeathSoundFile, cookieSF);
             }
-            // Is chat sounds enabled?
-            case 6:
-            {
-                (PlayerSounds[client].GetIsChatEnabled()) ? SetClientCookie(client, ck_ChatSoundsEnabled, "true") : SetClientCookie(client, ck_ChatSoundsEnabled, "false");
-            }
             // Is Connect sounds enabled?
             case 7:
             {
@@ -1038,7 +976,7 @@ public int SoundboardSlot_Handler(Menu menu, MenuAction action, int param1, int 
             GetClientAuthId(param1, AuthId_Steam3, SteamId, 64);
 
             char sQuery[512];
-            Format(sQuery, 512, "SELECT SteamId, ItemId, SoundName FROM %sInventories WHERE SUBSTR(ItemId, 1, 4)=\'snd_\' AND SteamId=\'%s\'", StoreSchema, SteamId);
+            Format(sQuery, 512, "SELECT SteamId, ItemId, SoundName FROM %sInventories WHERE SUBSTR(ItemId, 1, 4)=\'snd_\' AND SteamId=\'%s\' ORDER BY SoundName ASC", StoreSchema, SteamId);
             SQL_TQuery(DB_sntdb, SQL_GetPlayerSounds, sQuery, Info_Choice);
         }
     }
@@ -1061,7 +999,7 @@ public int ServerSoundSlot_Handler(Menu menu, MenuAction action, int param1, int
                     if (!PlayerSounds[param1].GetOwnsItem(0))
                     {
                         EmitSoundToClient(param1, "snt_sounds/ypp_sting.mp3");
-                        CPrintToChat(param1, "{rblxreallyred}Ye have ta buy this from the tavern first!\n{default}Use {greenyellow}/tavern {default}to see their wares!");
+                        CPrintToChat(param1, "{fullred}Ye have ta buy this from the tavern first!\n{default}Use {greenyellow}/tavern {default}to see their wares!");
                         menu.DisplayAt(param1, GetMenuSelectionPosition(), 0);
                         return 0;
                     }
@@ -1073,7 +1011,7 @@ public int ServerSoundSlot_Handler(Menu menu, MenuAction action, int param1, int
                     if (!PlayerSounds[param1].GetOwnsItem(0))
                     {
                         EmitSoundToClient(param1, "snt_sounds/ypp_sting.mp3");
-                        CPrintToChat(param1, "{rblxreallyred}Ye have ta buy this from the tavern first!\n{default}Use {greenyellow}/tavern {default}to see their wares!");
+                        CPrintToChat(param1, "{fullred}Ye have ta buy this from the tavern first!\n{default}Use {greenyellow}/tavern {default}to see their wares!");
                         menu.DisplayAt(param1, GetMenuSelectionPosition(), 0);
                         return 0;
                     }
@@ -1085,7 +1023,7 @@ public int ServerSoundSlot_Handler(Menu menu, MenuAction action, int param1, int
                     if (!PlayerSounds[param1].GetOwnsItem(1))
                     {
                         EmitSoundToClient(param1, "snt_sounds/ypp_sting.mp3");
-                        CPrintToChat(param1, "{rblxreallyred}Ye have ta buy this from the tavern first!\n{default}Use {greenyellow}/tavern {default}to see their wares!");
+                        CPrintToChat(param1, "{fullred}Ye have ta buy this from the tavern first!\n{default}Use {greenyellow}/tavern {default}to see their wares!");
                         menu.DisplayAt(param1, GetMenuSelectionPosition(), 0);
                         return 0;
                     }
@@ -1111,7 +1049,7 @@ public int ServerSoundSlot_Handler(Menu menu, MenuAction action, int param1, int
             GetClientAuthId(param1, AuthId_Steam3, SteamId, 64);
 
             char sQuery[512];
-            Format(sQuery, 512, "SELECT SteamId, ItemId, SoundName FROM %sInventories WHERE SUBSTR(ItemId, 1, 4)=\'snd_\' AND SteamId=\'%s\'", StoreSchema, SteamId);
+            Format(sQuery, 512, "SELECT SteamId, ItemId, SoundName FROM %sInventories WHERE SUBSTR(ItemId, 1, 4)=\'snd_\' AND SteamId=\'%s\' ORDER BY SoundName ASC", StoreSchema, SteamId);
             SQL_TQuery(DB_sntdb, SQL_GetPlayerSounds, sQuery, Info_Choice);
         }
     }
@@ -1126,22 +1064,6 @@ public int SettingPanel_Handler(Menu menu, MenuAction action, int param1, int pa
         {
             switch (param2)
             {
-                // case 1:
-                // {
-                //     EmitSoundToClient(param1, "buttons/button14.wav");
-                //     if (PlayerSounds[param1].GetIsChatEnabled())
-                //     {
-                //         PlayerSounds[param1].SetChatEnabled(false);
-                //         BuildSettingsPanel(param1);
-                //         SetSlotCookies(param1, 6);
-                //     }
-                //     else
-                //     {
-                //         PlayerSounds[param1].SetChatEnabled(true);
-                //         BuildSettingsPanel(param1);
-                //         SetSlotCookies(param1, 6);
-                //     }
-                // }
                 case 1:
                 {
                     EmitSoundToClient(param1, "buttons/button14.wav");
@@ -1262,7 +1184,7 @@ public int ECategoryPanel_Handler(Menu menu, MenuAction action, int param1, int 
             }
 
             char sQuery[512];
-            Format(sQuery, 512, "SELECT SteamId, ItemId, SoundName FROM %sInventories WHERE SUBSTR(ItemId, 1, 4)=\'snd_\' AND SteamId=\'%s\'", StoreSchema, SteamId);
+            Format(sQuery, 512, "SELECT SteamId, ItemId, SoundName FROM %sInventories WHERE SUBSTR(ItemId, 1, 4)=\'snd_\' AND SteamId=\'%s\' ORDER BY SoundName ASC", StoreSchema, SteamId);
             SQL_TQuery(DB_sntdb, SQL_GetPlayerSounds, sQuery, Info_Choice);
         }
     }
@@ -1623,14 +1545,14 @@ public Action USR_PlaySlot1(int client, int args)
     if (GetClientTeam(client) == 1 && !PlayerSounds[client].GetOwnsItem(2))
     {
         EmitSoundToClient(client, "snt_sounds/ypp_sting.mp3");
-        CPrintToChat(client, "%s {rblxreallyred} Ye can only play sounds while in spectator if ye get that from the {greenyellow}/tavern{default}!", Prefix);
+        CPrintToChat(client, "%s {fullred} Ye can only play sounds while in spectator if ye get that from the {greenyellow}/tavern{default}!", Prefix);
         return Plugin_Handled;
     }
 
     if (IsSlt1Cooldown[client])
     {
         EmitSoundToClient(client, "snt_sounds/ypp_sting.mp3");
-        CPrintToChat(client, "%s {rblxreallyred} Yer sound is on cooldown!", Prefix);
+        CPrintToChat(client, "%s {fullred} Yer sound is on cooldown!", Prefix);
         return Plugin_Handled;
     }
 
@@ -1645,7 +1567,7 @@ public Action USR_PlaySlot1(int client, int args)
     if (StrEqual(SoundId, "NONE"))
     {
         EmitSoundToClient(client, "snt_sounds/ypp_sting.mp3");
-        CPrintToChat(client, "%s {rblxreallyred} Ye don't have a sound in slot 1 equipped! View yer {greenyellow}/treasure {rblxreallyred} or use {greenyellow}/sound {rblxreallyred}to view the sound menu!", Prefix);
+        CPrintToChat(client, "%s {fullred} Ye don't have a sound in slot 1 equipped! View yer {greenyellow}/treasure {fullred} or use {greenyellow}/sound {fullred}to view the sound menu!", Prefix);
     }
     else
     {
@@ -1675,14 +1597,14 @@ public Action USR_PlaySlot2(int client, int args)
     if (GetClientTeam(client) == 1 && !PlayerSounds[client].GetOwnsItem(2))
     {
         EmitSoundToClient(client, "snt_sounds/ypp_sting.mp3");
-        CPrintToChat(client, "%s {rblxreallyred} Ye can only play sounds while in spectator if ye get that from the {greenyellow}/tavern{default}!", Prefix);
+        CPrintToChat(client, "%s {fullred} Ye can only play sounds while in spectator if ye get that from the {greenyellow}/tavern{default}!", Prefix);
         return Plugin_Handled;
     }
 
     if (IsSlt2Cooldown[client])
     {
         EmitSoundToClient(client, "snt_sounds/ypp_sting.mp3");
-        CPrintToChat(client, "%s {rblxreallyred} Yer sound is on cooldown!", Prefix);
+        CPrintToChat(client, "%s {fullred} Yer sound is on cooldown!", Prefix);
         return Plugin_Handled;
     }
 
@@ -1697,7 +1619,7 @@ public Action USR_PlaySlot2(int client, int args)
     if (StrEqual(SoundId, "NONE"))
     {
         EmitSoundToClient(client, "snt_sounds/ypp_sting.mp3");
-        CPrintToChat(client, "%s {rblxreallyred} Ye don't have a sound in slot 2 equipped! View yer {greenyellow}/treasure {rblxreallyred} or use {greenyellow}/sound {rblxreallyred}to view the sound menu!", Prefix);
+        CPrintToChat(client, "%s {fullred} Ye don't have a sound in slot 2 equipped! View yer {greenyellow}/treasure {fullred} or use {greenyellow}/sound {fullred}to view the sound menu!", Prefix);
     }
     else
     {
@@ -1727,14 +1649,14 @@ public Action USR_PlaySlot3(int client, int args)
     if (GetClientTeam(client) == 1 && !PlayerSounds[client].GetOwnsItem(2))
     {
         EmitSoundToClient(client, "snt_sounds/ypp_sting.mp3");
-        CPrintToChat(client, "%s {rblxreallyred} Ye can only play sounds while in spectator if ye get that from the {greenyellow}/tavern{default}!", Prefix);
+        CPrintToChat(client, "%s {fullred} Ye can only play sounds while in spectator if ye get that from the {greenyellow}/tavern{default}!", Prefix);
         return Plugin_Handled;
     }
 
     if (IsSlt3Cooldown[client])
     {
         EmitSoundToClient(client, "snt_sounds/ypp_sting.mp3");
-        CPrintToChat(client, "%s {rblxreallyred} Yer sound is on cooldown!", Prefix);
+        CPrintToChat(client, "%s {fullred} Yer sound is on cooldown!", Prefix);
         return Plugin_Handled;
     }
 
@@ -1749,7 +1671,7 @@ public Action USR_PlaySlot3(int client, int args)
     if (StrEqual(SoundId, "NONE"))
     {
         EmitSoundToClient(client, "snt_sounds/ypp_sting.mp3");
-        CPrintToChat(client, "%s {rblxreallyred} Ye don't have a sound in slot 3 equipped! View yer {greenyellow}/treasure {rblxreallyred} or use {greenyellow}/sound {rblxreallyred}to view the sound menu!", Prefix);
+        CPrintToChat(client, "%s {fullred} Ye don't have a sound in slot 3 equipped! View yer {greenyellow}/treasure {fullred} or use {greenyellow}/sound {fullred}to view the sound menu!", Prefix);
     }
     else
     {

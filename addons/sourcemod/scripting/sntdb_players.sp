@@ -6,7 +6,6 @@
 #include <tf2>
 #include <clientprefs>
 #include <clients>
-#include <menu-stocks>
 
 // Third Party Includes
 #include <chat-processor>
@@ -587,15 +586,15 @@ public Action CP_OnChatMessage(int& author, ArrayList recipients, char[] flagstr
                 switch(pos)
                 {
                     case 0:
-                        Format(temp_name, 512, "%s %s[NA]", name, pos_color);
+                        Format(temp_name, 512, "%s %s[NA]{default}", name, pos_color);
                     case 1:
-                        Format(temp_name, 512, "%s %s[#1]", name, pos_color);
+                        Format(temp_name, 512, "%s %s[#1]{default}", name, pos_color);
                     case 2:
-                        Format(temp_name, 512, "%s %s[#2]", name, pos_color);
+                        Format(temp_name, 512, "%s %s[#2]{default}", name, pos_color);
                     case 3:
-                        Format(temp_name, 512, "%s %s[#3]", name, pos_color);
+                        Format(temp_name, 512, "%s %s[#3]{default}", name, pos_color);
                     default:
-                        Format(temp_name, 512, "%s %s[#%i]", name, pos_color, pos);
+                        Format(temp_name, 512, "%s %s[#%i]{default}", name, pos_color, pos);
                 }
             }
         }
@@ -949,7 +948,7 @@ void BuildRankDispMenu(int client)
     else
     {
         EmitSoundToClient(client, "snt_sounds/ypp_sting.mp3");
-        CPrintToChat(client, "{rblxreallyred}Ye have ta buy this from the tavern first!\n{default}Use {greenyellow}/tavern {default}to see their wares!", Prefix);
+        CPrintToChat(client, "{fullred}Ye have ta buy this from the tavern first!\n{default}Use {greenyellow}/tavern {default}to see their wares!", Prefix);
     }
 }
 
