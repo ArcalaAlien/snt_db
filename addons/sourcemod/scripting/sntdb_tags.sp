@@ -284,7 +284,7 @@ void SendTagEquip_Native(Handle plugin, int params)
     GetClientAuthId(GetNativeCell(1), AuthId_Steam3, SteamId, 64);
 
     char sQuery[256];
-    Format(sQuery, 256, "SELECT ItemId, TagName, DisplayName, DisplayColor FROM %sInventories WHERE SteamId=\'%s\'", StoreSchema, SteamId);
+    Format(sQuery, 256, "SELECT ItemId, TagName, DisplayName, DisplayColor FROM %sInventories WHERE SteamId=\'%s\' ORDER BY TagName ASC", StoreSchema, SteamId);
     SQL_TQuery(DB_sntdb, SQL_FillTagList, sQuery, GetNativeCell(1));
 }
 
@@ -385,7 +385,7 @@ public int TagsPage1_Handler(Menu menu, MenuAction action, int param1, int param
                 case 1:
                 {
                     char sQuery[256];
-                    Format(sQuery, 256, "SELECT ItemId, TagName, DisplayName, DisplayColor FROM %sInventories WHERE SteamId=\'%s\'", StoreSchema, SteamId);
+                    Format(sQuery, 256, "SELECT ItemId, TagName, DisplayName, DisplayColor FROM %sInventories WHERE SteamId=\'%s\' ORDER BY TagName ASC", StoreSchema, SteamId);
                     SQL_TQuery(DB_sntdb, SQL_FillTagList, sQuery, param1);
                 }
                 case 2:
