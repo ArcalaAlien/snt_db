@@ -18,27 +18,6 @@ addons/sourcemod/scripting/chat-processor.sp
 addons/sourcemod/configs/chat_processor.cfg
 addons/sourcemod/configs/maplists.cfg
 
-materials/snt_trails/trail_01.vtf
-materials/snt_trails/trail_02.vtf
-materials/snt_trails/trail_03.vtf
-materials/snt_trails/trail_04.vtf
-materials/snt_trails/trail_05.vtf
-materials/snt_trails/trail_debug.vtf
-materials/snt_trails/trail_01.vmt
-materials/snt_trails/trail_02.vmt
-materials/snt_trails/trail_03.vmt
-materials/snt_trails/trail_04.vmt
-materials/snt_trails/trail_05.vmt
-materials/snt_trails/trail_debug.vmt
+materials/snt_trails/!.here
 
-sound/snt_sounds/aaau.mp3
-sound/snt_sounds/augh.mp3
-sound/snt_sounds/bruh.mp3
-sound/snt_sounds/crow.mp3
-sound/snt_sounds/fish.mp3
-sound/snt_sounds/huh.mp3
-sound/snt_sounds/open_door.mp3
-sound/snt_sounds/open_the_gate.mp3
-sound/snt_sounds/tada.mp3
-sound/snt_sounds/uuua.mp3
-sound/snt_sounds/yoyoi.mp3
+sound/snt_sounds/!.here
