@@ -9,6 +9,17 @@
 
 #include <morecolors>
 
+#define MSG01 "Have an issue with a player? Report them to an admin on our discord server!\nUse {greenyellow}discord.gg/xnuHA5KsEU{default} to join us and make a post in #public-staff-chat!"
+#define MSG02 "Are there no admins currently online? Use /votemenu to start votes against problematic players!\n{fullred}ABUSE OF VOTEMENU WILL RESULT IN REVOCATION OF VOTEMENU PRIVILEGES."
+#define MSG03 "Welcome to {greenyellow}Surf{default}'n'{orange}Turf! Join our discord community at {greenyellow}discord.gg/xnuHA5KsEU{default}!"
+#define MSG04 "Want an easy way to set up your custom items? Do {greenyellow}/equip{default} to access all custom item menus easily!"
+#define MSG05 "Want a change of scenery? Use {greenyellow}/rtv {default}to vote to change the map!"
+#define MSG06 "We have a huge selection of maps! Check it out using {greenyellow}/nominate!\n{default}Custom maps made for the server specifically will be at the top of the list!"
+#define MSG07 "Due to the 64 bit update some of our features are currently broken.\nWe are working dilligently in the background to get everything up and running again!"
+#define MSG08 "New to the server? Use {greenyellow}/info{default} to open the info menu!"
+#define MSG09 "Sail yerself to the {greenyellow}/tavern{default} ta check out their wares!"
+#define MSG10 "Wanna check to see what ye've got in yer coffers? Do {greenyellow}/treasure{default} to find out!"
+
 public Plugin myinfo =
 {
     name = "sntdb Core Module",
@@ -70,8 +81,6 @@ TODO:
 
     Server items?
         Micspam privileges
-        Colored names (expensive)
-        Colored chat (very expensive)
 
     Add /snt_groupmod <gid> <name> (Admin Only Command)
         Adds / removes a user in the server to a group.
@@ -97,8 +106,10 @@ char CurrentEvent[32] = "None";
 int  TimeLeft;
 
 int PlayerJoined[MAXPLAYERS+1];
+Handle InfoTimer = INVALID_HANDLE;
 
 // Convars
+ConVar TimeBetweenMessages;
 ConVar EventCooldown;
 
 public void OnPluginStart()
@@ -111,7 +122,7 @@ public void OnPluginStart()
     
     if (ConfigFile == null)
     {
-        ThrowError("[SNT] ERROR! \"configs/sntdb/main_config.cfg\": file does not exist!");
+        PrintToServer("[SNT] ERROR! \"configs/sntdb/main_config.cfg\": file does not exist!");
     }
 
     if (ConfigFile.JumpToKey("System"))
@@ -124,24 +135,35 @@ public void OnPluginStart()
     }
     else
     {
-        ThrowError("[SNT] ERROR! COULD NOT LOAD CORE CONFIG");
+        PrintToServer("[SNT] ERROR! COULD NOT LOAD CORE CONFIG");
     }  
 
-    // PrintToServer("[SNT] Connecting to Database");
-    // char error[255];
-    // DB_sntdb = SQL_Connect(DBConfName, true, error, sizeof(error));
-    // if (!StrEqual(error, ""))
-    // {
-    //     ThrowError("[SNT] ERROR IN PLUGIN START: %s", error);
-    // }
+    PrintToServer("[SNT] Connecting to Database");
+    char error[255];
+    DB_sntdb = SQL_Connect(DBConfName, true, error, sizeof(error));
+    if (!StrEqual(error, ""))
+    {
+        PrintToServer("[SNT] ERROR IN PLUGIN START: %s", error);
+    }
 
     HookEvent("player_team", OnPlayerTeam);
 
     EventCooldown = CreateConVar("snt_event_cooldown", "480", "The cooldown time in seconds between events.", 0, true, 300.0);
-    
-    RegAdminCmd("sm_snt_events",    ADM_OpenEventsMenu,      ADMFLAG_GENERIC,    "/snt_events: Use this to open the events menu.");
-    RegAdminCmd("sm_datetest",     ADM_TestPlugin,          ADMFLAG_GENERIC,    "test this bitch");
+    TimeBetweenMessages = CreateConVar("snt_msg_cooldown", "300", "The amount in seconds between each info message in chat.", 0, true, 180.0);
+
+    //RegAdminCmd("sm_snt_events",    ADM_OpenEventsMenu,      ADMFLAG_GENERIC,    "/snt_events: Use this to open the events menu.");
+    //RegAdminCmd("sm_datetest",     ADM_TestPlugin,          ADMFLAG_GENERIC,    "test this bitch");
     //RegAdminCmd("sm_snt_groupmod",  ADM_ModGroup,           ADMFLAG_BAN,        "/snt_groupmod <gid> <user>: Toggle a user's group id. Type list with no user to list all groups");
+}
+
+public void OnMapStart()
+{
+    InfoTimer = CreateTimer(TimeBetweenMessages.FloatValue, Timer_DisplayInfo, 0, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
+}
+
+public void OnMapEnd()
+{
+    KillTimer(InfoTimer);
 }
 
 public void OnPlayerTeam(Event event, const char[] name, bool dontBroadcast)
@@ -214,7 +236,7 @@ int ReadSQLConfigs(Handle plugin, int numParams)
     
     if (ConfigFile == null)
     {
-        ThrowError("[SNT] ERROR! \"configs/sntdb/main_config.cfg\": file does not exist!");
+        PrintToServer("[SNT] ERROR! \"configs/sntdb/main_config.cfg\": file does not exist!");
         return 0;
     }
 
@@ -223,7 +245,7 @@ int ReadSQLConfigs(Handle plugin, int numParams)
 
     if (!ConfigFile.JumpToKey("System"))
     {
-        ThrowError("[SNT] ERROR! Missing \"System\" section from config file.");
+        PrintToServer("[SNT] ERROR! Missing \"System\" section from config file.");
         delete ConfigFile;
         return 0;
     }
@@ -288,13 +310,13 @@ int ReadSQLStoreConfigs(Handle plugin, int numParams)
     
     if (ConfigFile == null)
     {
-        ThrowError("[SNT] ERROR! \"configs/sntdb/main_config.cfg\": file does not exist!");
+        PrintToServer("[SNT] ERROR! \"configs/sntdb/main_config.cfg\": file does not exist!");
         return 0;
     }
 
     if (!ConfigFile.JumpToKey("Store"))
     {
-        ThrowError("[SNT] ERROR! Missing \"Store\" section from config file.");
+        PrintToServer("[SNT] ERROR! Missing \"Store\" section from config file.");
         delete ConfigFile;
         return 0;
     }
@@ -405,6 +427,39 @@ public Action Timer_WelcomeMessage(Handle timer, any data)
     return Plugin_Continue;
 }
 
+public Action Timer_DisplayInfo(Handle timer, any data)
+{
+    int MsgToDisplay = GetRandomInt(1, 10);
+
+    char HintMessage[256];
+    switch (MsgToDisplay)
+    {
+        case 1:
+            Format(HintMessage, 256, "%s %s", Prefix, MSG01);
+        case 2:
+            Format(HintMessage, 256, "%s %s", Prefix, MSG02);
+        case 3:
+            Format(HintMessage, 256, "%s %s", Prefix, MSG03);
+        case 4:
+            Format(HintMessage, 256, "%s %s", Prefix, MSG04);
+        case 5:
+            Format(HintMessage, 256, "%s %s", Prefix, MSG05);
+        case 6:
+            Format(HintMessage, 256, "%s %s", Prefix, MSG06);
+        case 7:
+            Format(HintMessage, 256, "%s %s", Prefix, MSG07);
+        case 8:
+            Format(HintMessage, 256, "%s %s", Prefix, MSG08);
+        case 9:
+            Format(HintMessage, 256, "%s %s", Prefix, MSG09);
+        case 10:
+            Format(HintMessage, 256, "%s %s", Prefix, MSG10);
+    }
+
+    CPrintToChatAll(HintMessage);
+    return Plugin_Continue;
+}
+
 public Action ADM_OpenEventsMenu(int client, int args)
 {
     Menu EventMenu = new Menu(EventMenuHandler, MENU_ACTIONS_DEFAULT);
@@ -437,10 +492,5 @@ public Action ADM_OpenEventsMenu(int client, int args)
     }
 
     EventMenu.Display(client, MENU_TIME_FOREVER);
-    return Plugin_Handled;
-}
-
-public Action ADM_TestPlugin(int client, int args)
-{
     return Plugin_Handled;
 }

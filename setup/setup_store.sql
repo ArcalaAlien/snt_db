@@ -172,34 +172,34 @@ delimiter $$
 CREATE TRIGGER storeGivePlayerDefaults AFTER INSERT ON storeplayers FOR EACH ROW
 BEGIN 
 	INSERT INTO storeplayergroups VALUES (NEW.SteamId, 1);
-    INSERT INTO storeplayeritems (SteamId, ItemId) VALUES (NEW.SteamId, "tag_news"), (NEW.SteamId, "tag_bgns"), (NEW.SteamId, "tag_ints"), (NEW.SteamId, "tag_exps"), (NEW.SteamId, "tag_msts"), (NEW.SteamId, "tag_pirt"), (NEW.SteamId, "clr_srcm"), (NEW.SteamId, "snd_yarr"), (NEW.SteamId, "trl_pflg");
+    INSERT INTO storeplayeritems (SteamId, ItemId) VALUES (NEW.SteamId, "tag_news", 0), (NEW.SteamId, "tag_bgns", 0), (NEW.SteamId, "tag_ints", 0), (NEW.SteamId, "tag_exps", 0), (NEW.SteamId, "tag_msts", 0), (NEW.SteamId, "tag_pirt", 0), (NEW.SteamId, "clr_srcm", 0), (NEW.SteamId, "snd_yarr", 0), (NEW.SteamId, "trl_pflg", 0);
 END$$
 
 CREATE TRIGGER storeGiveItemsForSupporters AFTER INSERT ON storeplayergroups FOR EACH ROW
 BEGIN
     IF (NEW.GroupNum = 2) THEN
-        INSERT INTO storeplayeritems (SteamId, ItemId) VALUES (NEW.SteamId, "tag_erly"), (NEW.SteamId, "tag_hist"), (NEW.SteamId, "tag_frst"), (NEW.SteamId, "srv_rank"), (NEW.SteamId, "srv_mspm");
+        INSERT INTO storeplayeritems (SteamId, ItemId) VALUES (NEW.SteamId, "tag_erly", 0), (NEW.SteamId, "tag_hist", 0), (NEW.SteamId, "tag_frst", 0), (NEW.SteamId, "srv_rank", 0), (NEW.SteamId, "srv_mspm", 0);
 	END IF;
 END$$
 
 CREATE TRIGGER storeGiveItemsForContributors AFTER INSERT ON storeplayergroups FOR EACH ROW
 BEGIN
     IF (NEW.GroupNum = 3) THEN
-			INSERT INTO storeplayeritems (SteamId, ItemId) VALUES (NEW.SteamId, "tag_erly"), (NEW.SteamId, "tag_hist"), (NEW.SteamId, "tag_frst"), (NEW.SteamId, "srv_rank"), (NEW.SteamId, "srv_mspm");
+			INSERT INTO storeplayeritems (SteamId, ItemId) VALUES (NEW.SteamId, "tag_erly", 0), (NEW.SteamId, "tag_hist", 0), (NEW.SteamId, "tag_frst", 0), (NEW.SteamId, "srv_rank", 0), (NEW.SteamId, "srv_mspm", 0);
 	END IF;
 END$$
 
 CREATE TRIGGER storeGiveItemsForDonators AFTER INSERT ON storeplayergroups FOR EACH ROW
 BEGIN
     IF (NEW.GroupNum = 4) THEN
-			INSERT INTO storeplayeritems VALUES (NEW.SteamId, "tag_vip", 1), (NEW.SteamId, "tag_dnte", 1), (NEW.SteamId, "tag_rich", 1), (NEW.SteamId, "srv_mpsm", 1), (NEW.SteamId, "srv_rank", 1), (NEW.SteamId, "srv_cnme", 1);
+			INSERT INTO storeplayeritems VALUES (NEW.SteamId, "tag_vip", 1), (NEW.SteamId, "tag_dnte", 1), (NEW.SteamId, "tag_rich", 1), (NEW.SteamId, "srv_mpsm", 1), (NEW.SteamId, "srv_rank", 1), (NEW.SteamId, "srv_cnme", 1), (NEW.SteamId, "srv_ccht", 1);
 	END IF;
 END$$
 
 CREATE TRIGGER storeGiveServerSoundItems AFTER INSERT ON storeplayeritems FOR EACH ROW
 BEGIN
     IF (NEW.ItemId = 'srv_ssnd') THEN
-            INSERT INTO storeplayeritems VALUES (NEW.SteamId, "snd_srv_sting", 0), (NEW.SteamId, 'snd_srv_login', 0), (NEW.SteamId, 'snd_mspam_warn1'), (NEW.SteamId, 'snd_mspam_warn2');
+            INSERT INTO storeplayeritems VALUES (NEW.SteamId, "snd_srv_sting", 0), (NEW.SteamId, 'snd_srv_login', 0), (NEW.SteamId, 'snd_mspam_warn1', 0), (NEW.SteamId, 'snd_mspam_warn2', 0);
     END IF;
 END$$
 

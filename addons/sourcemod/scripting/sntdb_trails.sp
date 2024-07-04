@@ -1,5 +1,6 @@
 #include <sourcemod>
 #include <sdktools>
+#include <tf2>
 #include <dbi>
 #include <clientprefs>
 #include <files>
@@ -316,6 +317,22 @@ public void OnPlayerDeath(Event event, const char[] name, bool dontBroadcast)
     int uid = GetEventInt(event, "userid");
     int client = GetClientOfUserId(uid);
     KillTrail(client);
+}
+
+public void TF2_OnConditionAdded(int client, TFCond condition)
+{
+    if (condition == TFCond_Cloaked)
+    {
+        KillTrail(client);
+    }
+}
+
+public void TF2_OnConditionRemoved(int client, TFCond condition)
+{
+    if (condition == TFCond_Cloaked)
+    {
+        CreateTrail(client);
+    }
 }
 
 void CreateTrail(int client)
