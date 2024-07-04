@@ -5,11 +5,13 @@
 DROP TABLE IF EXISTS surf0playermaps;
 DROP TABLE IF EXISTS surf0maps;
 DROP TABLE IF EXISTS surf0players;
+DROP TABLE IF EXISTS surf0votes;
 
 CREATE TABLE surf0players (
     SteamId     varchar(64),
     PlayerName  varchar(64)     NOT NULL,
     Points      decimal         DEFAULT 0,
+    VotePerms   decimal         DEFAULT 1,
     PRIMARY KEY (SteamId)
 );
 
@@ -31,6 +33,16 @@ CREATE TABLE surf0playermaps (
     PRIMARY KEY (SteamId, MapName),
     FOREIGN KEY (SteamId) REFERENCES surf0players (SteamId),
     FOREIGN KEY (MapName) REFERENCES surf0maps (MapName)
+);
+
+CREATE TABLE surf0votes (
+    VoterAuth    varchar(64),
+    VoteeAuth    varchar(64),
+    VoteType     varchar(12),
+    VoterName    varchar(64),
+    VoteeName    varchar(64),
+    DateCalled   varchar(64),
+    PRIMARY KEY (VoterAuth, DateCalled)
 );
 
 -- VIEWS --

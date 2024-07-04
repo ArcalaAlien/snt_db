@@ -979,7 +979,8 @@ void BuildPlayerInfoMenu(int client, DataPack data)
     InfoPanel.DrawText(RankLine);
     InfoPanel.DrawText(PointsLine);
     InfoPanel.DrawText(" ");
-    InfoPanel.DrawItem("Player List");
+    InfoPanel.DrawItem("Current Player List");
+    InfoPanel.DrawItem("Top 10 Players");
     InfoPanel.DrawItem("Main Menu");
     InfoPanel.Send(client, InfoPanel_Handler, 30);
 }
@@ -1118,6 +1119,20 @@ public int InfoPanel_Handler(Menu menu, MenuAction action, int param1, int param
                     CloseHandle(menu);
                 }   
                 case 2:
+                {
+                    DataPack Client_Info;
+                    Client_Info = CreateDataPack();
+                    Client_Info.WriteCell(param1);
+
+                    char SteamId[64];
+                    GetClientAuthId(param1, AuthId_Steam3, SteamId, 64);
+                    Client_Info.WriteString(SteamId);
+        
+                    char sQuery[256];
+                    Format(sQuery, sizeof(sQuery), "SELECT * FROM %splayers ORDER BY Points DESC LIMIT 10", SchemaName)
+                    SQL_TQuery(DB_sntdb, SQL_BuildTop10, sQuery, Client_Info);
+                }
+                case 3:
                 {
                     BuildPage1Menu(param1);
                     CloseHandle(menu);

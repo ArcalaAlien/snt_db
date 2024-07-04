@@ -839,6 +839,7 @@ public int InfoPanel_Handler(Menu menu, MenuAction action, int param1, int param
                         case 1:
                         {
                             CPrintToChatEx(param1, param1, "%s%s %s%s: %sPreviewing tag in chat.", TagColor, TagName, NameColor, PlayerName, TextColor);
+                            menu.DisplayAt(param1, GetMenuSelectionPosition(), 0);
                         }
                         case 2:
                         {
@@ -857,7 +858,7 @@ public int InfoPanel_Handler(Menu menu, MenuAction action, int param1, int param
                             Category_Info.WriteCell(param1);
                             Category_Info.WriteCell(1);
 
-                            Format(sQuery, 512, "SELECT Price, ItemId, TagName FROM %stags ORDER BY Price, TagName ASC", StoreSchema);
+                            Format(sQuery, 512, "SELECT Price, ItemId, TagName FROM %stags WHERE Owner=\'STORE\' ORDER BY Price, TagName ASC", StoreSchema);
                             SQL_TQuery(DB_sntdb, SQL_FillItemMenu, sQuery, Category_Info);
                         }
                         case 4:
@@ -881,8 +882,10 @@ public int InfoPanel_Handler(Menu menu, MenuAction action, int param1, int param
                     {
                         case 1:
                         {
+
                             EmitSoundToClient(param1, SoundFile);
                             CPrintToChat(param1, "%s Previewing sound: {greenyellow}%s", Prefix, SoundName);
+                            menu.DisplayAt(param1, GetMenuSelectionPosition(), 0);
                         }
                         case 2:
                         {
@@ -903,7 +906,7 @@ public int InfoPanel_Handler(Menu menu, MenuAction action, int param1, int param
                             Category_Info.WriteCell(param1);
                             Category_Info.WriteCell(2);
 
-                            Format(sQuery, 512, "SELECT Price, ItemId, SoundName, Cooldown FROM %ssounds ORDER BY Price, SoundName ASC", StoreSchema);
+                            Format(sQuery, 512, "SELECT Price, ItemId, SoundName, Cooldown FROM %ssounds WHERE Owner=\'STORE\' ORDER BY Price, SoundName ASC", StoreSchema);
                             SQL_TQuery(DB_sntdb, SQL_FillItemMenu, sQuery, Category_Info);
                         }
                         case 4:
@@ -941,7 +944,7 @@ public int InfoPanel_Handler(Menu menu, MenuAction action, int param1, int param
                             Category_Info.WriteCell(param1);
                             Category_Info.WriteCell(3);
 
-                            Format(sQuery, 512, "SELECT Price, ItemId, TrailName FROM %strails ORDER BY Price, TrailName ASC", StoreSchema);
+                            Format(sQuery, 512, "SELECT Price, ItemId, TrailName FROM %strails WHERE Owner=\'STORE\' ORDER BY Price, TrailName ASC", StoreSchema);
                             SQL_TQuery(DB_sntdb, SQL_FillItemMenu, sQuery, Category_Info);
                         }
                         case 3:
@@ -984,7 +987,7 @@ public int InfoPanel_Handler(Menu menu, MenuAction action, int param1, int param
                             Category_Info.WriteCell(param1);
                             Category_Info.WriteCell(1);
 
-                            Format(sQuery, 512, "SELECT Price, ItemId, ItemName, ItemDesc FROM %sserveritems ORDER BY Price, ItemName ASC", StoreSchema);
+                            Format(sQuery, 512, "SELECT Price, ItemId, ItemName, ItemDesc FROM %sserveritems WHERE Owner=\'STORE\' ORDER BY Price, ItemName ASC", StoreSchema);
                             SQL_TQuery(DB_sntdb, SQL_FillItemMenu, sQuery, Category_Info);
                         }
                         case 3:

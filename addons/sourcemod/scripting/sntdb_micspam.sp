@@ -25,7 +25,7 @@ public Plugin myinfo =
 Database DB_sntdb;
 char DBConfName[64];
 char SchemaName[64];
-char StoreSchema[64]
+char StoreSchema[64];
 char Prefix[96];
 
 ArrayList MicspamQueue;
@@ -115,7 +115,7 @@ public void OnClientPutInServer(int client)
     GetClientAuthId(client, AuthId_Steam3, SteamId, 64);
 
     char sQuery[256];
-    Format(sQuery, 256, "SELECT ItemId FROM %sInventories WHERE SteamId=\'%s\' AND ItemId=\'srv_mspam\'", StoreSchema, SteamId)
+    Format(sQuery, 256, "SELECT ItemId FROM %sInventories WHERE SteamId=\'%s\' AND LEFT(ItemId, 4)=\'srv_\'", StoreSchema, SteamId);
 
     SQL_TQuery(DB_sntdb, SQL_CheckForItem, sQuery, client);
 
@@ -532,7 +532,7 @@ void JoinSpamQ(int client)
     GetClientAuthId(client, AuthId_Steam3, SteamId, 64);
 
     char sQuery[256];
-    Format(sQuery, 256, "SELECT ItemId FROM %sInventories WHERE SteamId=\'%s\' AND ItemId=\'srv_mspam\'", StoreSchema, SteamId);
+    Format(sQuery, 256, "SELECT ItemId FROM %sInventories WHERE SteamId=\'%s\' AND LEFT(ItemId, 4)=\'srv_\'", StoreSchema, SteamId);
 
     SQL_TQuery(DB_sntdb, SQL_CheckForItem, sQuery, client);
     
@@ -1170,8 +1170,7 @@ public void SQL_CheckForItem(Database db, DBResultSet results, const char[] erro
 
         if (StrEqual(ItemId, "srv_mspam"))
             OwnsMicspamItem[data] = true;
-        else
-            OwnsMicspamItem[data] = false;
+            return;
     }
 }
 
@@ -1240,7 +1239,7 @@ public Action Timer_MicspamTimer(Handle timer, any client)
             MicspamTimer = INVALID_HANDLE;
             MicspamQueue.Erase(index);
             MicspamQueue.Push(client);
-            CPrintToChat(client, "%s Thank ye fer spamming! Ye've been moved to the back of the queue!", Prefix);
+            CPrintToChat(client, "%s Thank ye fer spamming! Ye've been moved to the aft o' the queue!", Prefix);
             return Plugin_Stop;
         }
         return Plugin_Continue;
@@ -1264,7 +1263,7 @@ public Action USR_OpenMicspamMenu(int client, int args)
     GetClientAuthId(client, AuthId_Steam3, SteamId, 64);
 
     char sQuery[256];
-    Format(sQuery, 256, "SELECT ItemId FROM %sInventories WHERE SteamId=\'%s\' AND ItemId=\'srv_mspam\'", StoreSchema, SteamId)
+    Format(sQuery, 256, "SELECT ItemId FROM %sInventories WHERE SteamId=\'%s\' AND LEFT(ItemId, 4)=\'srv_\'", StoreSchema, SteamId);
 
     SQL_TQuery(DB_sntdb, SQL_CheckForItem, sQuery, client);
 
