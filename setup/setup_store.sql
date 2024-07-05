@@ -89,13 +89,8 @@ CREATE TABLE storeplayeritems (
 );
 
 -- VIEWS --
-DROP VIEW IF EXISTS storeInventories;
-DROP VIEW IF EXISTS storeTopItems;
-DROP VIEW IF EXISTS storeTopTags;
-DROP VIEW IF EXISTS storeTopSounds;
-DROP VIEW IF EXISTS storeTopTrails;
 
-CREATE VIEW storeInventories AS
+CREATE OR REPLACE VIEW storeInventories AS
 SELECT P.SteamId, PI.ItemId, P.PlayerName, TA.TagName, TA.DisplayName, TA.DisplayColor, S.SoundName, S.SoundFile, S.Cooldown, TR.TrailName, TR.ModelIndex, SI.ItemName, SI.ItemDesc
 FROM storeplayers P
     JOIN storeplayeritems PI
@@ -109,7 +104,7 @@ FROM storeplayers P
             LEFT JOIN storeserveritems SI
                 ON PI.ItemId = SI.ItemId;
 
-CREATE VIEW storeTopItems AS
+CREATE OR REPLACE VIEW storeTopItems AS
 SELECT ItemId, DisplayName, SoundName, TrailName, ItemName, SUM(Buyers) TotalPurchased
 FROM ( 
     SELECT PL.ItemId, TA.DisplayName, S.SoundName, TR.TrailName, SI.ItemName, COUNT(DISTINCT PL.SteamId) Buyers
@@ -126,7 +121,7 @@ FROM (
 ) AS ItemCount
 GROUP BY ItemId, DisplayName, SoundName, TrailName, ItemName;
 
-CREATE VIEW storeTopTags AS
+CREATE OR REPLACE VIEW storeTopTags AS
 SELECT ItemId, SUM(Buyers) TotalPurchased
 FROM ( 
     SELECT PL.ItemId, TA.DisplayName, COUNT(DISTINCT PL.SteamId) Buyers
@@ -137,7 +132,7 @@ FROM (
 ) AS TagCount
 GROUP BY ItemId, DisplayName;
 
-CREATE VIEW storeTopSounds AS
+CREATE OR REPLACE VIEW storeTopSounds AS
 SELECT ItemId, SoundName, SUM(Buyers) TotalPurchased
 FROM ( 
     SELECT PL.ItemId, S.SoundName, COUNT(DISTINCT PL.SteamId) Buyers
@@ -148,7 +143,7 @@ FROM (
 ) AS SoundCount
 GROUP BY ItemId, SoundName;
 
-CREATE VIEW storeTopTrails AS
+CREATE OR REPLACE VIEW storeTopTrails AS
 SELECT ItemId, TrailName, SUM(Buyers) TotalPurchased
 FROM ( 
     SELECT PL.ItemId, TR.TrailName, COUNT(DISTINCT PL.SteamId) Buyers

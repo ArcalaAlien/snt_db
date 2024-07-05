@@ -1,11 +1,11 @@
 #include <sourcemod>
-#include <clients>
 #include <string>
 #include <dbi>
 #include <files>
 #include <sdktools>
 #include <keyvalues>
 #include <tf2>
+#include <chat-processor>
 
 #include <morecolors>
 
@@ -19,6 +19,7 @@
 #define MSG08 "New to the server? Use {greenyellow}/info{default} to open the info menu!"
 #define MSG09 "Sail yerself to the {greenyellow}/tavern{default} ta check out their wares!"
 #define MSG10 "Wanna check to see what ye've got in yer coffers? Do {greenyellow}/treasure{default} to find out!"
+#define MSG11 "Wanna know how to use those sounds you bought from the store?\nBind keys to {greenyellow}sm_playslot1, sm_playslot2, & sm_playslot3 {default}to use our in-server soundboard!"
 
 public Plugin myinfo =
 {
@@ -107,6 +108,7 @@ int  TimeLeft;
 
 int PlayerJoined[MAXPLAYERS+1];
 Handle InfoTimer = INVALID_HANDLE;
+Handle InfoTimer2 = INVALID_HANDLE;
 
 // Convars
 ConVar TimeBetweenMessages;
@@ -159,11 +161,13 @@ public void OnPluginStart()
 public void OnMapStart()
 {
     InfoTimer = CreateTimer(TimeBetweenMessages.FloatValue, Timer_DisplayInfo, 0, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
+    InfoTimer2 = CreateTimer((TimeBetweenMessages.FloatValue + 60.0), Timer_DisplayInfo2, 0, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
 }
 
 public void OnMapEnd()
 {
     KillTimer(InfoTimer);
+    KillTimer(InfoTimer2);
 }
 
 public void OnPlayerTeam(Event event, const char[] name, bool dontBroadcast)
@@ -180,6 +184,26 @@ public void OnPlayerTeam(Event event, const char[] name, bool dontBroadcast)
 public void OnClientDisconnect(int client)
 {
     PlayerJoined[client] = 0;
+}
+
+public Action CP_OnChatMessage(int& author, ArrayList recipients, char[] flagstring, char[] name, char[] message, bool& processcolors, bool& removecolors)
+{
+    char DateSent[32];
+    FormatTime(DateSent, 32, "%c", GetTime());
+
+    char SteamId[64];
+    GetClientAuthId(author, AuthId_Steam3, SteamId, 64);
+
+    char NameEsc[257];
+    char MessageEsc[513];
+    SQL_EscapeString(DB_sntdb, name, NameEsc, 257);
+    SQL_EscapeString(DB_sntdb, message, MessageEsc, 513);
+
+    char iQuery[1024];
+    Format(iQuery, 512, "INSERT INTO %slogs VALUES (\'%s\', \'%s\', \'%s\', \'%s\')", DateSent, SteamId, NameEsc, MessageEsc);
+    SQL_TQuery(DB_sntdb, SQL_ErrorHandler, iQuery);
+
+    return Plugin_Changed;
 }
 
 bool CheckWeekend(char[] day)
@@ -370,6 +394,15 @@ public int EventMenuHandler(Menu menu, MenuAction action, int param1, int param2
     return 0;
 }
 
+public void SQL_ErrorHandler(Database db, DBResultSet results, const char[] error, any data)
+{
+    if (db == null)
+        PrintToServer("[SNT] ERROR! DATABASE IS NULL!");
+
+    if (!StrEqual(error, ""))
+        PrintToServer("[SNT] ERROR IN QUERY: %s", error);
+}
+
 public Action Timer_WelcomeMessage(Handle timer, any data)
 {
     char CurrentHour[4];
@@ -429,7 +462,7 @@ public Action Timer_WelcomeMessage(Handle timer, any data)
 
 public Action Timer_DisplayInfo(Handle timer, any data)
 {
-    int MsgToDisplay = GetRandomInt(1, 10);
+    int MsgToDisplay = GetRandomInt(1, 5);
 
     char HintMessage[256];
     switch (MsgToDisplay)
@@ -444,16 +477,31 @@ public Action Timer_DisplayInfo(Handle timer, any data)
             Format(HintMessage, 256, "%s %s", Prefix, MSG04);
         case 5:
             Format(HintMessage, 256, "%s %s", Prefix, MSG05);
-        case 6:
+    }
+
+    CPrintToChatAll(HintMessage);
+    return Plugin_Continue;
+}
+
+public Action Timer_DisplayInfo2(Handle timer, any data)
+{
+    int MsgToDisplay = GetRandomInt(1, 6);
+
+    char HintMessage[256];
+    switch (MsgToDisplay)
+    {
+        case 1:
             Format(HintMessage, 256, "%s %s", Prefix, MSG06);
-        case 7:
+        case 2:
             Format(HintMessage, 256, "%s %s", Prefix, MSG07);
-        case 8:
+        case 3:
             Format(HintMessage, 256, "%s %s", Prefix, MSG08);
-        case 9:
+        case 4:
             Format(HintMessage, 256, "%s %s", Prefix, MSG09);
-        case 10:
+        case 5:
             Format(HintMessage, 256, "%s %s", Prefix, MSG10);
+        case 6:
+            Format(HintMessage, 256, "%s %s", Prefix, MSG11);
     }
 
     CPrintToChatAll(HintMessage);
@@ -471,7 +519,7 @@ public Action ADM_OpenEventsMenu(int client, int args)
 
     Format(DisplayEvent, sizeof(DisplayEvent), "Current Event: %s", CurrentEvent);
 
- 
+
     EventMenu.SetTitle("Choose an event!");
     EventMenu.AddItem("CURRENT", DisplayEvent, ITEMDRAW_DISABLED);
     
