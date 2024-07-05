@@ -506,27 +506,27 @@ public int PlayerList_Handler(Menu menu, MenuAction action, int param1, int para
             {
                 case 0:
                 {
-                    Format(iQuery, 512, "INSERT INTO %svotes VALUES (\'%s\', \'%s\', \'%s\', \'%s\', \'%s\', \'%s\')", SchemaName, VoterAuth, ExplodedOpt[2], "SLAY", VoterNameEsc, VoteeNameEsc, VoteTimestamp);
+                    Format(iQuery, 512, "INSERT INTO %svotes VALUES (\'%s\', \'%s\', \'%s\', \'%s\', \'%s\', \'%s\')", SchemaName, VoteTimestamp, VoterAuth, ExplodedOpt[2], "SLAY", VoterNameEsc, VoteeNameEsc);
                     VoteMenuToAll(BuildVoteMenu(0, VoteeName, StringToInt(ExplodedOpt[1])), 20);
                 }
                 case 1:
                 {
-                    Format(iQuery, 512, "INSERT INTO %svotes VALUES (\'%s\', \'%s\', \'%s\', \'%s\', \'%s\', \'%s\')", SchemaName, VoterAuth, ExplodedOpt[2], "GAG", VoterNameEsc, VoteeNameEsc, VoteTimestamp);
+                    Format(iQuery, 512, "INSERT INTO %svotes VALUES (\'%s\', \'%s\', \'%s\', \'%s\', \'%s\', \'%s\')", SchemaName, VoteTimestamp, VoterAuth, ExplodedOpt[2], "GAG", VoterNameEsc, VoteeNameEsc);
                     VoteMenuToAll(BuildVoteMenu(1, VoteeName, StringToInt(ExplodedOpt[1])), 20);
                 }
                 case 2:
                 {
-                    Format(iQuery, 512, "INSERT INTO %svotes VALUES (\'%s\', \'%s\', \'%s\', \'%s\', \'%s\', \'%s\')", SchemaName, VoterAuth, ExplodedOpt[2], "MUTE", VoterNameEsc, VoteeNameEsc, VoteTimestamp);
+                    Format(iQuery, 512, "INSERT INTO %svotes VALUES (\'%s\', \'%s\', \'%s\', \'%s\', \'%s\', \'%s\')", SchemaName, VoteTimestamp, VoterAuth, ExplodedOpt[2], "MUTE", VoterNameEsc, VoteeNameEsc);
                     VoteMenuToAll(BuildVoteMenu(2, VoteeName, StringToInt(ExplodedOpt[1])), 20);
                 }
                 case 3:
                 {
-                    Format(iQuery, 512, "INSERT INTO %svotes VALUES (\'%s\', \'%s\', \'%s\', \'%s\', \'%s\', \'%s\')", SchemaName, VoterAuth, ExplodedOpt[2], "KICK", VoterNameEsc, VoteeNameEsc, VoteTimestamp);
+                    Format(iQuery, 512, "INSERT INTO %svotes VALUES (\'%s\', \'%s\', \'%s\', \'%s\', \'%s\', \'%s\')", SchemaName, VoteTimestamp, VoterAuth, ExplodedOpt[2], "KICK", VoterNameEsc, VoteeNameEsc);
                     VoteMenuToAll(BuildVoteMenu(3, VoteeName, StringToInt(ExplodedOpt[1])), 20);
                 }
                 case 4:
                 {
-                    Format(iQuery, 512, "INSERT INTO %svotes VALUES (\'%s\', \'%s\', \'%s\', \'%s\', \'%s\', \'%s\')", SchemaName, VoterAuth, ExplodedOpt[2], "BAN", VoterNameEsc, VoteeNameEsc, VoteTimestamp);
+                    Format(iQuery, 512, "INSERT INTO %svotes VALUES (\'%s\', \'%s\', \'%s\', \'%s\', \'%s\', \'%s\')", SchemaName, VoteTimestamp, VoterAuth, ExplodedOpt[2], "BAN", VoterNameEsc, VoteeNameEsc);
                     VoteMenuToAll(BuildVoteMenu(4, VoteeName, StringToInt(ExplodedOpt[1])), 20);
                 }
             }

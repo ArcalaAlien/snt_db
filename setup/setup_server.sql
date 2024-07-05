@@ -2,10 +2,12 @@
 
 -- TABLES --
 
+DROP TABLE IF EXISTS surf0votes;
+DROP TABLE IF EXISTS surf0logs;
 DROP TABLE IF EXISTS surf0playermaps;
 DROP TABLE IF EXISTS surf0maps;
 DROP TABLE IF EXISTS surf0players;
-DROP TABLE IF EXISTS surf0votes;
+
 
 CREATE TABLE surf0players (
     SteamId     varchar(64),
@@ -36,20 +38,29 @@ CREATE TABLE surf0playermaps (
 );
 
 CREATE TABLE surf0votes (
+    DateCalled   varchar(64),
     VoterAuth    varchar(64),
     VoteeAuth    varchar(64),
     VoteType     varchar(12),
     VoterName    varchar(64),
     VoteeName    varchar(64),
-    DateCalled   varchar(64),
-    PRIMARY KEY (VoterAuth, DateCalled)
+    PRIMARY KEY (VoterAuth, DateCalled),
+    FOREIGN KEY (VoterAuth) REFERENCES surf0players (SteamId),
+    FOREIGN KEY (VoteeAuth) REFERENCES surf0players (SteamId)
 );
+
+CREATE TABLE surf0logs (
+    DateSent    varchar(64),
+    ChatterAuth varchar(64),
+    ChatterName varchar(64),
+    ChatMessage varchar(512),
+    PRIMARY KEY (DateSent, ChatterAuth),
+    FOREIGN KEY (ChatterAuth) REFERENCES surf0players(SteamId)
+)
 
 -- VIEWS --
 
-DROP VIEW IF EXISTS surf0MapRatings;
-
-CREATE VIEW surf0MapRatings AS
+CREATE OR REPLACE VIEW surf0MapRatings AS
 SELECT VoteCount.MapName, SUM(SubmittedVotes) TotalVotes, CAST(((Rating1+Rating2+Rating3+Rating4+Rating5)/SUM(SubmittedVotes)) AS decimal(10, 2)) Stars
 FROM (
     SELECT M.MapName, COUNT(DISTINCT SteamId) SubmittedVotes 
@@ -66,6 +77,9 @@ GROUP BY VoteCount.MapName;
 -- TRIGGERS --
 
 delimiter $$
+
+DROP TRIGGER IF EXISTS surf0CleanUpPlayer$$
+DROP TRIGGER IF EXISTS surf0CleanUpMap$$
 
 CREATE TRIGGER surf0CleanUpPlayer BEFORE DELETE ON surf0players FOR EACH ROW
 BEGIN
