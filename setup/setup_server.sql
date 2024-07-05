@@ -60,7 +60,9 @@ CREATE TABLE surf0logs (
 
 -- VIEWS --
 
-CREATE OR REPLACE VIEW surf0MapRatings AS
+DROP VIEW IF EXISTS surf0MapRatings;
+
+CREATE VIEW surf0MapRatings AS
 SELECT VoteCount.MapName, SUM(SubmittedVotes) TotalVotes, CAST(((Rating1+Rating2+Rating3+Rating4+Rating5)/SUM(SubmittedVotes)) AS decimal(10, 2)) Stars
 FROM (
     SELECT M.MapName, COUNT(DISTINCT SteamId) SubmittedVotes 
