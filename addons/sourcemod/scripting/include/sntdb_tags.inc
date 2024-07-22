@@ -99,3 +99,12 @@ native void OpenTagMenu(int client);
  * @param client    Client index
  */
 native void OpenTagEquip(int client);
+
+/**
+ * Sends if the player is displaying a tag
+ * 
+ * @param client    Client index
+ * 
+ * @return true - Player is displaying, false - Player is not displaying.
+ */
+native bool GetPlayerTagBool(int client);

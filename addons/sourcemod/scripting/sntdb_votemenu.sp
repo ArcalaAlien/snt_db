@@ -4,7 +4,6 @@
 #include <basecomm>
 #include <tf2>
 #include <dbi>
-
 #include <morecolors>
 
 #define REQUIRE_PLUGIN
@@ -64,11 +63,6 @@ public void OnPluginStart()
     HookEvent("player_team", Event_OnPlayerTeam);
 
     RegConsoleCmd("sm_votemenu", USR_OpenVoteMenu, "Use /votemenu to open the votemenu.");
-    RegConsoleCmd("sm_votekick", USR_OpenVoteKick, "Use /votekick to start a vote to kick a player.");
-    RegConsoleCmd("sm_voteban", USR_OpenVoteBan, "Use /voteban to start a vote to ban a player for 15 mins.");
-    RegConsoleCmd("sm_votemute", USR_OpenVoteMute, "Use /votemute to start a vote to mute a player for 15 mins.");
-    RegConsoleCmd("sm_votegag", USR_OpenVoteGag, "Use /votegag to start a vote to mute a gag a player for 15 mins.");
-    RegConsoleCmd("sm_votekill", USR_OpenVoteSlay, "Use /votekill to start a vote to slay a player.");
 
     RegAdminCmd("sm_voteperms", ADM_ModVotePerms, ADMFLAG_GENERIC, "Use /voteperms [add | rmv] (opt: Steam3ID) to give / remove a player's votemenu permissions");
 }
@@ -100,14 +94,17 @@ public void OnClientPostAdminCheck(int client)
 
 public void OnClientDisconnect(int client)
 {
-    if (GagTimer[client] != INVALID_HANDLE)
-        KillTimer(GagTimer[client]);
-    
-    if (MuteTimer[client] != INVALID_HANDLE)
-        KillTimer(MuteTimer[client]);
+    if (IsValidClient(client))
+    {
+        if (GagTimer[client] != INVALID_HANDLE)
+            KillTimer(GagTimer[client]);
+        
+        if (MuteTimer[client] != INVALID_HANDLE)
+            KillTimer(MuteTimer[client]);
 
-    isPlayerWarned[client] = false;
-    playerHasVotePerms[client] = true;
+        isPlayerWarned[client] = false;
+        playerHasVotePerms[client] = true;
+    }
 }
 
 public Action Event_OnPlayerTeam(Event event, const char[] name, bool dontBroadcast)
@@ -159,7 +156,7 @@ void BuildPage1(int client)
 
     Menu VoteMenu_Page1 = new Menu(Page1_Handler, MENU_ACTIONS_DEFAULT);
     VoteMenu_Page1.SetTitle("Choose a category");
-    VoteMenu_Page1.AddItem("SLAY", "Vote kill player");
+    VoteMenu_Page1.AddItem("SLAY", "Vote slay player");
     VoteMenu_Page1.AddItem("GAG", GagOpt);
     VoteMenu_Page1.AddItem("MUTE", MuteOpt);
     VoteMenu_Page1.AddItem("KICK", "Vote kick player");
@@ -238,7 +235,7 @@ void BuildPlayerList(int client, int type)
     switch (type)
     {
         case 0:
-            PlayerList.SetTitle("Choose a player to kill:");
+            PlayerList.SetTitle("Choose a player to slay:");
         case 1:
             PlayerList.SetTitle("Choose a player to gag:");
         case 2:
@@ -251,31 +248,7 @@ void BuildPlayerList(int client, int type)
 
     for (int i = 1; i <= GetClientCount(); i++)
     {
-        if (type == 0 && IsPlayerAlive(i) && !IsFakeClient(i) && i != client)
-        {
-            char PlayerAuth[64];
-            char PlayerName[128];
-            GetClientName(i, PlayerName, 128);
-            GetClientAuthId(i, AuthId_Steam3, PlayerAuth, 64);
-
-            char MenuOpt[80];
-            switch (type)
-            {
-                case 0:
-                    Format(MenuOpt, 80, "0,%i,%s", i, PlayerAuth);
-                case 1:
-                    Format(MenuOpt, 80, "1,%i,%s", i, PlayerAuth);
-                case 2:
-                    Format(MenuOpt, 80, "2,%i,%s", i, PlayerAuth);
-                case 3:
-                    Format(MenuOpt, 80, "3,%i,%s", i, PlayerAuth);
-                case 4:
-                    Format(MenuOpt, 80, "4,%i,%s", i, PlayerAuth);
-            }
-            
-            PlayerList.AddItem(MenuOpt, PlayerName);
-        }
-        else if (!IsFakeClient(i) && i != client)
+        if (IsClientConnected(i) && IsClientInGame(i) && !IsFakeClient(i))
         {
             char PlayerAuth[64];
             char PlayerName[128];
@@ -856,240 +829,5 @@ public Action USR_OpenVoteMenu(int client, int args)
     }
 
     BuildPage1(client);
-    return Plugin_Handled;
-}
-
-public Action USR_OpenVoteKick(int client, int args)
-{
-    if (client == 0)
-    {
-        PrintToServer("The server cannot start votes.");
-        return Plugin_Handled;
-    }
-
-    char AuthID[64];
-    GetClientAuthId(client, AuthId_Steam3, AuthID, 64);
-
-    char sQuery[512];
-    Format(sQuery, 512, "SELECT VotePerms FROM %splayers WHERE SteamId=\'%s\'", SchemaName, AuthID);
-    SQL_TQuery(DB_sntdb, SQL_CheckForPerms, sQuery, client);
-
-    if (!playerHasVotePerms[client])
-    {
-        EmitSoundToClient(client, "snt_sounds/ypp_sting.mp3");
-        CPrintToChat(client, "%s {fullred}Your vote privileges have been revoked by an admin!", Prefix);
-        return Plugin_Handled;
-    }
-
-    if (GetClientCount() == 1)
-    {
-        EmitSoundToClient(client, "snt_sounds/ypp_sting.mp3");
-        CPrintToChat(client, "%s {fullred}You cannot start a vote as the only person in the server.", Prefix);
-        return Plugin_Handled;
-    }
-
-    if (isVoteOnCooldown)
-    {
-        EmitSoundToClient(client, "snt_sounds/ypp_sting.mp3");
-        CPrintToChat(client, "%s {fullred}You cannot start a vote while the vote system is on cooldown!", Prefix);
-        return Plugin_Handled;
-    }
-
-    if (IsVoteInProgress())
-    {
-        EmitSoundToClient(client, "snt_sounds/ypp_sting.mp3");
-        CPrintToChat(client, "%s {fullred}You cannot start a vote while another vote is in progress!", Prefix);
-        return Plugin_Handled;
-    }
-
-    BuildPlayerList(client, 3);
-    return Plugin_Handled;
-}
-
-public Action USR_OpenVoteBan(int client, int args)
-{
-    if (client == 0)
-    {
-        PrintToServer("The server cannot start votes.");
-        return Plugin_Handled;
-    }
-
-    char AuthID[64];
-    GetClientAuthId(client, AuthId_Steam3, AuthID, 64);
-
-    char sQuery[512];
-    Format(sQuery, 512, "SELECT VotePerms FROM %splayers WHERE SteamId=\'%s\'", SchemaName, AuthID);
-    SQL_TQuery(DB_sntdb, SQL_CheckForPerms, sQuery, client);
-
-    if (!playerHasVotePerms[client])
-    {
-        EmitSoundToClient(client, "snt_sounds/ypp_sting.mp3");
-        CPrintToChat(client, "%s {fullred}Your vote privileges have been revoked by an admin!", Prefix);
-        return Plugin_Handled;
-    }
-
-    if (GetClientCount() == 1)
-    {
-        EmitSoundToClient(client, "snt_sounds/ypp_sting.mp3");
-        CPrintToChat(client, "%s {fullred}You cannot start a vote as the only person in the server.", Prefix);
-        return Plugin_Handled;
-    }
-
-    if (isVoteOnCooldown)
-    {
-        EmitSoundToClient(client, "snt_sounds/ypp_sting.mp3");
-        CPrintToChat(client, "%s {fullred}You cannot start a vote while the vote system is on cooldown!", Prefix);
-        return Plugin_Handled;
-    }
-
-    if (IsVoteInProgress())
-    {
-        EmitSoundToClient(client, "snt_sounds/ypp_sting.mp3");
-        CPrintToChat(client, "%s {fullred}You cannot start a vote while another vote is in progress!", Prefix);
-        return Plugin_Handled;
-    }
-
-    BuildPlayerList(client, 4);
-    return Plugin_Handled;
-}
-
-public Action USR_OpenVoteMute(int client, int args)
-{
-    if (client == 0)
-    {
-        PrintToServer("The server cannot start votes.");
-        return Plugin_Handled;
-    }
-
-    char AuthID[64];
-    GetClientAuthId(client, AuthId_Steam3, AuthID, 64);
-
-    char sQuery[512];
-    Format(sQuery, 512, "SELECT VotePerms FROM %splayers WHERE SteamId=\'%s\'", SchemaName, AuthID);
-    SQL_TQuery(DB_sntdb, SQL_CheckForPerms, sQuery, client);
-
-    if (!playerHasVotePerms[client])
-    {
-        EmitSoundToClient(client, "snt_sounds/ypp_sting.mp3");
-        CPrintToChat(client, "%s {fullred}Your vote privileges have been revoked by an admin!", Prefix);
-        return Plugin_Handled;
-    }
-
-    if (GetClientCount() == 1)
-    {
-        EmitSoundToClient(client, "snt_sounds/ypp_sting.mp3");
-        CPrintToChat(client, "%s {fullred}You cannot start a vote as the only person in the server.", Prefix);
-        return Plugin_Handled;
-    }
-
-    if (isVoteOnCooldown)
-    {
-        EmitSoundToClient(client, "snt_sounds/ypp_sting.mp3");
-        CPrintToChat(client, "%s {fullred}You cannot start a vote while the vote system is on cooldown!", Prefix);
-        return Plugin_Handled;
-    }
-
-    if (IsVoteInProgress())
-    {
-        EmitSoundToClient(client, "snt_sounds/ypp_sting.mp3");
-        CPrintToChat(client, "%s {fullred}You cannot start a vote while another vote is in progress!", Prefix);
-        return Plugin_Handled;
-    }
-
-    BuildPlayerList(client, 2);
-    return Plugin_Handled;
-}
-
-public Action USR_OpenVoteGag(int client, int args)
-{
-    if (client == 0)
-    {
-        PrintToServer("The server cannot start votes.");
-        return Plugin_Handled;
-    }
-
-    char AuthID[64];
-    GetClientAuthId(client, AuthId_Steam3, AuthID, 64);
-
-    char sQuery[512];
-    Format(sQuery, 512, "SELECT VotePerms FROM %splayers WHERE SteamId=\'%s\'", SchemaName, AuthID);
-    SQL_TQuery(DB_sntdb, SQL_CheckForPerms, sQuery, client);
-
-    if (!playerHasVotePerms[client])
-    {
-        EmitSoundToClient(client, "snt_sounds/ypp_sting.mp3");
-        CPrintToChat(client, "%s {fullred}Your vote privileges have been revoked by an admin!", Prefix);
-        return Plugin_Handled;
-    }
-
-    if (GetClientCount() == 1)
-    {
-        EmitSoundToClient(client, "snt_sounds/ypp_sting.mp3");
-        CPrintToChat(client, "%s {fullred}You cannot start a vote as the only person in the server.", Prefix);
-        return Plugin_Handled;
-    }
-
-    if (isVoteOnCooldown)
-    {
-        EmitSoundToClient(client, "snt_sounds/ypp_sting.mp3");
-        CPrintToChat(client, "%s {fullred}You cannot start a vote while the vote system is on cooldown!", Prefix);
-        return Plugin_Handled;
-    }
-
-    if (IsVoteInProgress())
-    {
-        EmitSoundToClient(client, "snt_sounds/ypp_sting.mp3");
-        CPrintToChat(client, "%s {fullred}You cannot start a vote while another vote is in progress!", Prefix);
-        return Plugin_Handled;
-    }
-
-    BuildPlayerList(client, 1);
-    return Plugin_Handled;
-}
-
-public Action USR_OpenVoteSlay(int client, int args)
-{
-    if (client == 0)
-    {
-        PrintToServer("The server cannot start votes.");
-        return Plugin_Handled;
-    }
-
-    char AuthID[64];
-    GetClientAuthId(client, AuthId_Steam3, AuthID, 64);
-
-    char sQuery[512];
-    Format(sQuery, 512, "SELECT VotePerms FROM %splayers WHERE SteamId=\'%s\'", SchemaName, AuthID);
-    SQL_TQuery(DB_sntdb, SQL_CheckForPerms, sQuery, client);
-
-    if (!playerHasVotePerms[client])
-    {
-        EmitSoundToClient(client, "snt_sounds/ypp_sting.mp3");
-        CPrintToChat(client, "%s {fullred}Your vote privileges have been revoked by an admin!", Prefix);
-        return Plugin_Handled;
-    }
-
-    if (GetClientCount() == 1)
-    {
-        EmitSoundToClient(client, "snt_sounds/ypp_sting.mp3");
-        CPrintToChat(client, "%s {fullred}You cannot start a vote as the only person in the server.", Prefix);
-        return Plugin_Handled;
-    }
-
-    if (isVoteOnCooldown)
-    {
-        EmitSoundToClient(client, "snt_sounds/ypp_sting.mp3");
-        CPrintToChat(client, "%s {fullred}You cannot start a vote while the vote system is on cooldown!", Prefix);
-        return Plugin_Handled;
-    }
-
-    if (IsVoteInProgress())
-    {
-        EmitSoundToClient(client, "snt_sounds/ypp_sting.mp3");
-        CPrintToChat(client, "%s {fullred}You cannot start a vote while another vote is in progress!", Prefix);
-        return Plugin_Handled;
-    }
-
-    BuildPlayerList(client, 0);
     return Plugin_Handled;
 }

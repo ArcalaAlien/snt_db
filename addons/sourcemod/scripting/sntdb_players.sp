@@ -13,6 +13,7 @@
 
 #define REQUIRE_PLUGIN
 #include <sntdb_core>
+#include <sntdb_store>
 
 public Plugin myinfo =
 {
@@ -331,7 +332,6 @@ public void OnPluginStart()
 
     RegAdminCmd("sm_snt_reloadrcfg",    ADM_ReloadCFG,  ADMFLAG_ROOT,     "Use this to reload the config file after you've changed it.");
     RegAdminCmd("sm_snt_rrefresh",      ADM_RefreshDB,  ADMFLAG_BAN,      "Refresh the database for every client in the server.");
-    RegAdminCmd("sm_snt_starttable",    ADM_StartTable, ADMFLAG_ROOT,     "Insert yourself as the first row of the table. REQUIRED FOR RANKS TO WORK.");
 
     RegConsoleCmd("sm_ranks", USR_OpenRankMenu);
 
@@ -408,7 +408,8 @@ public void OnClientPutInServer(int client)
 
 public void OnClientDisconnect(int client)
 {
-    Player[client].Reset();
+    if (IsValidClient(client))
+        Player[client].Reset();
 }
 
 public void OnPlayerDeath(Event event, const char[] name, bool dontBroadcast)
@@ -454,7 +455,7 @@ public void OnPlayerDeath(Event event, const char[] name, bool dontBroadcast)
             APts = APts + PtsToAdd;
             Player[attacker].AddPoints(PtsToAdd);
 
-            CPrintToChat(attacker, "%s You got %.2f points for killing {greenyellow}%s{default}!", Prefix, PtsToAdd, vname);
+            CPrintToChat(attacker, "%s You got {greenyellow}%.2f points{default} for killing {greenyellow}%s{default}!", Prefix, PtsToAdd, vname);
 
             // Update the player's points in the table.
             char uQuery[512];
@@ -563,6 +564,12 @@ public Action CP_OnChatMessage(int& author, ArrayList recipients, char[] flagstr
 
         PointCfg.GetPlaceColor(pos, pos_color, sizeof(pos_color));
         char temp_name[512];
+
+        char nameColor[64];
+        char chatColor[64];
+        GetClientNameColor(author, nameColor, 64);
+        GetClientChatColor(author, chatColor, 64);
+
         switch (DispPos)
         {
             case 0:
@@ -570,15 +577,15 @@ public Action CP_OnChatMessage(int& author, ArrayList recipients, char[] flagstr
                 switch(pos)
                 {
                     case 0:
-                        Format(temp_name, 512, "%s[NA] %s", pos_color, name);
+                        Format(temp_name, 512, "%s[NA] %s%s%s", pos_color, nameColor, name, chatColor);
                     case 1:
-                        Format(temp_name, 512, "%s[#1] %s", pos_color, name);
+                        Format(temp_name, 512, "%s[#1] %s%s%s", pos_color, nameColor, name, chatColor);
                     case 2:
-                        Format(temp_name, 512, "%s[#2] %s", pos_color, name);
+                        Format(temp_name, 512, "%s[#2] %s%s%s", pos_color, nameColor, name, chatColor);
                     case 3:
-                        Format(temp_name, 512, "%s[#3] %s", pos_color, name);
+                        Format(temp_name, 512, "%s[#3] %s%s%s", pos_color, nameColor, name, chatColor);
                     default:
-                        Format(temp_name, 512, "%s[#%i] %s", pos_color, pos, name);
+                        Format(temp_name, 512, "%s[#%i] %s%s%s", pos_color, pos, nameColor, name, chatColor);
                 }
             }
             case 1:
@@ -586,15 +593,15 @@ public Action CP_OnChatMessage(int& author, ArrayList recipients, char[] flagstr
                 switch(pos)
                 {
                     case 0:
-                        Format(temp_name, 512, "%s %s[NA]{default}", name, pos_color);
+                        Format(temp_name, 512, "%s%s %s[NA]%s", nameColor, name, pos_color, chatColor);
                     case 1:
-                        Format(temp_name, 512, "%s %s[#1]{default}", name, pos_color);
+                        Format(temp_name, 512, "%s%s %s[#1]%s", nameColor, name, pos_color, chatColor);
                     case 2:
-                        Format(temp_name, 512, "%s %s[#2]{default}", name, pos_color);
+                        Format(temp_name, 512, "%s%s %s[#2]%s", nameColor, name, pos_color, chatColor);
                     case 3:
-                        Format(temp_name, 512, "%s %s[#3]{default}", name, pos_color);
+                        Format(temp_name, 512, "%s%s %s[#3]%s", nameColor, name, pos_color, chatColor);
                     default:
-                        Format(temp_name, 512, "%s %s[#%i]{default}", name, pos_color, pos);
+                        Format(temp_name, 512, "%s%s %s[#%i]%s", nameColor, name, pos_color, pos, chatColor);
                 }
             }
         }
@@ -835,10 +842,32 @@ void HandleKillstreak(int victim, int attacker)
             // If the victim had more than 5 kills, broadcast the killstreak message.
             if  (Player[victim].GetKS() >= 5)
             {
+                float APts = Player[attacker].GetPoints();
+                float Multi = Player[victim].GetMultiplier();
+                float KillPts = PointCfg.GetKillPts();
+                char ASteamId[64];
+                char vname[MAX_NAME_LENGTH];
+
+                GetClientAuthId(attacker, AuthId_Steam3, ASteamId, 64);
+                GetClientName(victim, vname, MAX_NAME_LENGTH);
+
                 EmitSoundToAll("snt_sounds/ypp_sting.mp3");
                 char msg2[256];
                 // Format msg: "[SNT] Attacker ended Victim's killstreak!"
                 Format(msg2, sizeof(msg2), "%s %s%s {default}made %s%s {default}walk the plank, ending thar killstreak!", Prefix, ATeamColor, AName, VTeamColor, VName);
+
+                // Add our points and multiply it by the KS bonus.
+                float PtsToAdd = (KillPts * 2.0) * (Multi);
+                APts = APts + PtsToAdd;
+                Player[attacker].AddPoints(PtsToAdd);
+
+                CPrintToChat(attacker, "%s You got {greenyellow}%.2f points{default} for ending {greenyellow}%s{default}'s killstreak!", Prefix, PtsToAdd, vname);
+
+                // Update the player's points in the table.
+                char uQuery[512];
+                Format(uQuery, sizeof(uQuery), "UPDATE %splayers SET Points=%f WHERE SteamId=\'%s\'", SchemaName, APts, ASteamId);
+                SQL_TQuery(DB_sntdb, SQL_ErrorHandler, uQuery);
+
                 KSMessage(victim, attacker, msg2);
             }
 
@@ -989,10 +1018,10 @@ void BuildPage1Menu(int client)
 {
     Menu Page1 = new Menu(Page1_Handler, MENU_ACTIONS_DEFAULT);
     Page1.SetTitle("SNT Ranks");
-    Page1.AddItem("VYR", "View yer stats!");
-    Page1.AddItem("VPR", "View yer crewmate's stats!");
-    Page1.AddItem("TOP", "View the top 10 players!");
-    Page1.AddItem("DISP", "Toggle yer rank display!");
+    Page1.AddItem("1", "View yer stats!");
+    Page1.AddItem("2", "View yer crewmate's stats!");
+    Page1.AddItem("3", "View the top 10 players!");
+    Page1.AddItem("4", "Toggle yer rank display!");
     Page1.Display(client, 10);
 }
 
@@ -1076,24 +1105,24 @@ public int Page1_Handler(Menu menu, MenuAction action, int param1, int param2)
             char Option[6];
             GetMenuItem(menu, param2, Option, sizeof(Option));
 
-            if (StrEqual(Option, "VYR"))
+            if (StrEqual(Option, "1"))
             {
                 Client_Info.WriteCell(menu);
                 char sQuery[256];
                 Format(sQuery, sizeof(sQuery), "SELECT * FROM %splayers ORDER BY Points DESC", SchemaName)
                 SQL_TQuery(DB_sntdb, SQL_GetPlayerInfoMenu, sQuery, Client_Info);
             }
-            else if (StrEqual(Option, "VPR"))
+            else if (StrEqual(Option, "2"))
             {
                 BuildPlayerList(param1);
             }
-            else if (StrEqual(Option, "TOP"))
+            else if (StrEqual(Option, "3"))
             {
                 char sQuery[256];
                 Format(sQuery, sizeof(sQuery), "SELECT * FROM %splayers ORDER BY Points DESC LIMIT 10", SchemaName)
                 SQL_TQuery(DB_sntdb, SQL_BuildTop10, sQuery, Client_Info);
             }
-            else if (StrEqual(Option, "DISP"))
+            else if (StrEqual(Option, "4"))
             {
                 BuildRankDispMenu(param1);
             }
@@ -1347,10 +1376,6 @@ public void SQL_GetPlayerInfoMenu(Database db, DBResultSet results, const char[]
             BuildPlayerInfoMenu(client, Info_Pack);
             break;
         }
-        else
-        {
-            PrintToServer("[SNT] SQL_GetPlayerInfoMenu: Unable to find a player match.");
-        }
     }
 }
 
@@ -1419,35 +1444,6 @@ public Action ADM_RefreshDB(int client, int args)
         SQL_TQuery(DB_sntdb, SQL_GetPlayerInfo, sQuery, Client_Pack);
     }
 
-    return Plugin_Handled;
-}
-
-public Action ADM_StartTable(int client, int args)
-{
-    char SteamId[64];
-    GetClientAuthId(client, AuthId_Steam3, SteamId, 64);
-
-    char ClientName[128];
-    char ClientNameEsc[257];
-
-    GetClientName(client, ClientName, 128);
-    SQL_EscapeString(DB_sntdb, ClientName, ClientNameEsc, 257);
-
-    Player[client].SetPlayerName(ClientName);
-    Player[client].SetClientId(client);
-    Player[client].SetUserId(GetClientUserId(client));
-    Player[client].SetAuthId(SteamId);
-    Player[client].SetPoints(0.0);
-    Player[client].SetRank(0);
-    Player[client].ResetKS();
-    Player[client].SetMultiplier(1.0);
-    Player[client].SetOwnsRank(false);
-    Player[client].SetRankDispPos(1);
-
-    char iQuery[512];
-    Format(iQuery, sizeof(iQuery), "INSERT INTO %splayers (SteamId, PlayerName) VALUES (\'%s\', \'%s\')", SchemaName, SteamId, ClientNameEsc);
-
-    SQL_TQuery(DB_sntdb, SQL_ErrorHandler, iQuery);
     return Plugin_Handled;
 }
 

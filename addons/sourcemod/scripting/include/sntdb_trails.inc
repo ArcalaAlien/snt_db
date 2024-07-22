@@ -55,4 +55,13 @@ native void OpenTrailMenu(int client);
  */
 native void OpenTrailEquip(int client);
 
+/**
+ * Sends if a player is displaying their tag
+ * 
+ * @param client    Client index
+ * 
+ * @return bool
+ */
+native bool SendPlayerTagBool(int client);
+
 

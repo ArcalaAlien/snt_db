@@ -427,8 +427,8 @@ void StopSpamming(int client)
         PlayerSpamming = false;
 
         MicspamQueue.Erase(index);
+        MicspamQueue.ShiftUp(index);
         MicspamQueue.Push(client);
-        MicspamQueue.ShiftUp(1);
         CPrintToChat(client, "%s Sucessfully moved ye to the aft o' the queue! Ye be now number: %i", Prefix, MicspamQueue.Length);
 
         if (MicspamTimer != INVALID_HANDLE)

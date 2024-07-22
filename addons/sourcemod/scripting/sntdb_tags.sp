@@ -78,6 +78,16 @@ enum struct TagSettings
     {
         return this.TagPosition;
     }
+
+    void Reset()
+    {
+        this.IsTagDisplayed = false;
+        Format(this.TagColor, sizeof(this.TagColor), "NONE");
+        Format(this.TagDisplay, sizeof(this.TagDisplay), "NONE");
+        Format(this.TagId, sizeof(this.TagId), "NONE");
+        Format(this.TagName, sizeof(this.TagName), "NONE");
+        this.TagPosition = 0;
+    }
 }
 
 public Plugin myinfo =
@@ -111,6 +121,7 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 
     CreateNative("OpenTagMenu", BuildTagsPage1_Native);
     CreateNative("OpenTagEquip", SendTagEquip_Native);
+    CreateNative("GetPlayerTagBool", SendDisplayingTag_Native);
     RegPluginLibrary("sntdb_tags");
 
     return APLRes_Success;
@@ -136,11 +147,19 @@ public void OnPluginStart()
 
     RegConsoleCmd("sm_tag", USR_OpenTagMenu, "/tag: Use this to open the tag menu!");
     RegConsoleCmd("sm_tags", USR_OpenTagMenu, "/tags: Use this to open the tag menu!");
+    RegConsoleCmd("sm_title", USR_OpenTagMenu, "/title: Use this to open the tag/title menu!");
+    RegConsoleCmd("sm_titles", USR_OpenTagMenu, "/titles: Use this to open the tag/title menu!");
 }
 
 public void OnClientPutInServer(int client)
 {
     GetCookies(client);
+}
+
+public void OnClientDisconnect(int client)
+{
+    if (IsValidClient(client))
+        PlayerTags[client].Reset();
 }
 
 void GetCookies(int client)
@@ -260,7 +279,7 @@ void BuildSettingsPanel(int client)
     SettingsPanel.Send(client, SettingsPanel_Handler, 0);
 }
 
-void BuildTagsPage1_Native(Handle plugin, int params)
+public void BuildTagsPage1_Native(Handle plugin, int params)
 {
     int client = GetNativeCell(1);
     char CTagName[64];
@@ -278,7 +297,7 @@ void BuildTagsPage1_Native(Handle plugin, int params)
     TagsPage1.Send(GetNativeCell(1), TagsPage1_Handler, 0);
 }
 
-void SendTagEquip_Native(Handle plugin, int params)
+public void SendTagEquip_Native(Handle plugin, int params)
 {
     char SteamId[64];
     GetClientAuthId(GetNativeCell(1), AuthId_Steam3, SteamId, 64);
@@ -286,6 +305,13 @@ void SendTagEquip_Native(Handle plugin, int params)
     char sQuery[256];
     Format(sQuery, 256, "SELECT ItemId, TagName, DisplayName, DisplayColor FROM %sInventories WHERE SteamId=\'%s\' ORDER BY TagName ASC", StoreSchema, SteamId);
     SQL_TQuery(DB_sntdb, SQL_FillTagList, sQuery, GetNativeCell(1));
+}
+
+public any SendDisplayingTag_Native(Handle plugin, int params)
+{
+    int client = GetNativeCell(1)
+
+    return PlayerTags[client].GetShowingTag();
 }
 
 public int SettingsPanel_Handler(Menu menu, MenuAction action, int param1, int param2)

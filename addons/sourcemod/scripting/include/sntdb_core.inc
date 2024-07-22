@@ -382,7 +382,7 @@ enum struct SNT_ClientInfo
  * @param   storelen                size of store schema buffer
  * @return                          Returns 1 on success, 0 on fail.
  */
-native int LoadSQLConfigs(const char[] dbconfig_name, int maxlength, const char[] prefix, int prefixlen, const char[] schema, int schemalen, const char[] calledby, int usingstore=0, const char[] store_schema={' '}, int storelen=0);
+native bool LoadSQLConfigs(const char[] dbconfig_name, int maxlength, const char[] prefix, int prefixlen, const char[] schema, int schemalen, const char[] calledby, int usingstore=0, const char[] store_schema={' '}, int storelen=0);
 
 /**
  * Loads the configs for the map module from configs/sntdb/main_config.cfg
@@ -402,5 +402,28 @@ native int LoadSQLConfigs(const char[] dbconfig_name, int maxlength, const char[
  * @param   over_mins               The X minute interval.
  * @return                          Returns 1 on success, 0 on fail.
  */
-native int LoadSQLStoreConfigs(const char[] dbconfig_name, int maxlength, const char[] prefix, int prefixlen, const char[] schema, int schemalen, const char[] calledby, const char[] currency_name={' '}, int maxlencur=1, const char[] currency_color={' '}, int maxlencol=1, int& credits_given, float& over_mins);
+native bool LoadSQLStoreConfigs(const char[] dbconfig_name, int maxlength, const char[] prefix, int prefixlen, const char[] schema, int schemalen, const char[] calledby, const char[] currency_name={' '}, int maxlencur=1, const char[] currency_color={' '}, int maxlencol=1, int& credits_given, float& over_mins);
 
+/**
+ * @param   timezone        0 - EST, 1 - PST, 2 - CET
+ * @param   current_time    Char buffer to store server time in.
+ * @param   maxlen          length of char buffer
+ */
+native void GetServerTime(int timezone, char[] current_time, int maxlen);
+
+/**
+ * @param current_day   char buffer to store day
+ * @param maxlen        max len of char buffer
+ */
+native void GetServerDay(char[] current_day, int maxlen);
+
+/**
+ * @return true if friday, saturday, or sunday. false otherwise.
+ */
+native bool CheckForWeekend();
+
+/**
+ * @param client    Client index to check
+ * @return          true if IsClientConnected, IsClientInGame return true and IsFakeClient returns false, otherwise false.
+ */
+native bool IsValidClient(int client);

@@ -14,7 +14,7 @@ VALUES
 ("snd_crow",    "Crow",                     "snt_sounds/crow.mp3",              0.5,      250),
 ("snd_door",    "opun dorr",                "snt_sounds/open_door.mp3",         2.0,     1000),
 ("snd_gate",    "OPEN THE GATE",            "snt_sounds/open_the_gate.mp3",     0.2,      250),
-("snd_augh",    "Augh",                     "snt_sounds/augh.mp3",              0.5,     1000),
+("snd_augh",    "Augh",                     "snt_sounds/augh.mp3",              0.2,     1000),
 ("snd_tada",    "Tada",                     "snt_sounds/tada.mp3",              1.0,      250),
 ("snd_fish",    "FISH",                     "snt_sounds/fish.mp3",              1.0,      500),
 ("snd_huh",     "Huh",                      "snt_sounds/huh.mp3",               0.5,      500),
@@ -127,6 +127,10 @@ VALUES
 ("tag_wrdo",    "Weirdo",       "[Weirdo]",         "{mediumpurple}",      1000),
 ("tag_stnk",    "Stinky",       "[Stinky]",         "{darkolivegreen}",    1500),
 ("tag_exlr",    "Explorer",     "[Explorer]",       "{darkolivegreen}",     250),
+("tag_dank",    "Dank",         "[Dank]",           "{forestgreen}",        250),
+("tag_bigm",    "Big Man",      "[Big Man]",        "{darkorange}",         250),
+("tag_bigl",    "Big Lady",     "[Big Lady]",       "{purple}",             250),
+("tag_bug",     "Bug",          "[Bug]",            "{mediumturquoise}",    250),
 ("tag_tsun",    "Tsundere",     "[Tsundere]",       "{lightblue}",         1000),
 ("tag_robt",    "Robot",        "[Robot]",          "{steelblue}",          750),
 ("tag_kilr",    "Killer",       "[Killer]",         "{darkslategrey}",      500),
@@ -137,8 +141,10 @@ VALUES
 ("tag_simp",    "Simp",         "[Simp]",           "{plum}",              3000),
 ("tag_susy",    "Sussy",        "[Sussy]",          "{fullred}",           5000),
 ("tag_sus",     "Sus",          "[Sus]",            "{fullred}",           5000),
-("tag_gnme",    "Gnome",        "[Gnome]",          "{darkseagreen}",      1000),
-("tag_gbln",    "Goblin",       "[Goblin]",         "{indianred}",         1000),
+("tag_gnme",    "Gnome",        "[Gnome]",          "{darkseagreen}",       250),
+("tag_gbln",    "Goblin",       "[Goblin]",         "{indianred}",          500),
+("tag_kbld",    "Kobold",       "[Kobold]",         "{firebrick}",          500),
+("tag_nerd",    "Nerd",         "[Nerd]",           "{uncommon}",           500),
 ("tag_snt",     "SurfNTurf",	"[SurfNTurf]",      "{mistyrose}",         2000),
 ("tag_trsf",    "Trans F",      "[TransF]",         "{lightpink}",          750),
 ("tag_trsm",    "Trans M",      "[TransM]",         "{powderblue}",         750),
@@ -514,14 +520,14 @@ VALUES
 
 INSERT INTO storeserveritems
 VALUES
---("srv_mspm",        "Micspamming Privileges",   "The ability to use our micspam system\nUse /micspam help for more info!",                      DEFAULT,     250),
 ("srv_rank",        "Display Rank",             "The ability to have your rank\ndisplayed in chat, before or\nafter your name.",                DEFAULT,    1500),
 ("srv_cnme",        "Colored Name",             "Color your name using colors\nprovided by our palettes!",                                      DEFAULT,    5000),
 ("srv_ccht",        "Colored Chat",             "Color your chat using colors\nprovided by our palettes!",                                      DEFAULT,    5000),
 ("srv_csnd",        "Entry / Exit Sounds",      "The ability to equip a sound that\nplays when you enter or leave\nthe server.",                DEFAULT,    5000),
 ("srv_dsnd",        "Death Sounds",             "Play a sound when you die!",                                                                   DEFAULT,    5000),
---("srv_ssnd",        "Server Sounds",            "Get all of the sounds the server\nuses added to your inventory!",                              DEFAULT,    5000),
 ("srv_spcs",        "Spectator Sounds",         "Use your soundboard while in spectator!",                                                      DEFAULT,    7500),
+("srv_mspm",        "Micspamming Privileges",   "The ability to use our micspam system\nUse /micspam help for more info! COMING SOON!",         DEFAULT, 1500000),
+("srv_ssnd",        "Server Sounds",            "Get all of the sounds the server\nuses added to your inventory!",                              DEFAULT,    5000),
 ("srv_clr_rblx",    "Roblox Palette",           "BrickColors ripped straight from the roblox wiki!\nUse them to spice up your name / chat!",    DEFAULT,    2500);
 
 -- Insert items with unique owners --
@@ -557,15 +563,29 @@ VALUES
 ("snd_mspam_warn1",     "YPP Whistle",  "snt_sounds/ypp_whistle.mp3",       1.2,                "SYSTEM"),
 ("snd_mspam_warn2",     "YPP Sting 2",  "snt_sounds/ypp_sting2.mp3",        1.2,                "SYSTEM");
 
-INSERT INTO storetrails
+INSERT INTO storetrails (ItemId, TrailName, TextureVTF, TextureVMT, Owner)
 VALUES
-("trl_pflg",    "Pirate Flag",  "materials/snt_trails/trail_pirateflag.vtf", "materials/snt_trails/trail_pirateflag.vmt", 0, "REGUALR", 0);
+("trl_pflg",    "Pirate Flag",  "materials/snt_trails/trail_pirateflag.vtf", "materials/snt_trails/trail_pirateflag.vmt", "REGUALR");
 
 INSERT INTO storeplayers (SteamId, PlayerName)
 VALUES
 ("[U:1:115545346]", "Arcala the Gyiyg"),
 ("[U:1:129770678]", "bob"),
 ("[U:1:105279633]", "Emm"),
+("[U:1:178424863]", "Sephimoth"),
+("[U:1:67025950]", "Veret"),
+("[U:1:1213352566]", "cora"),
+("[U:1:143187699]", "Karii"),
+("[U:1:1054371461]", "John Herbert"),
+("[U:1:136042535]", "Lord Vader"),
+("[U:1:58021514]", "LucasDoofus"),
+("[U:1:167477095]", "Leospartan"),
+("[U:1:109869232]", "Nope"),
+("[U:1:371533460]", "unrevoked"),
+("[U:1:210419507]", "nick7257"),
+("[U:1:36989342]", "Pop'n'fresh"),
+("[U:1:311817307]", "weeabruh"),
+("[U:1:1010265126]", "sk8te"),
 ("[U:1:387291587]", "twerp");
 
 INSERT INTO storeserveritems (ItemId, ItemName, ItemDesc, Owner)
@@ -582,4 +602,41 @@ VALUES
 ("[U:1:387291587]", "snd_bigq"),
 ("[U:1:387291587]", "snd_bigl"),
 ("[U:1:387291587]", "snd_bigk"),
+("[U:1:115545346]", "tag_alin"),
+("[U:1:115545346]", "srv_cnme"),
 ("[U:1:115545346]", "snd_myst");
+
+INSERT INTO storeplayergroups
+VALUES
+("[U:1:387291587]", 2) /* Twerp */,
+("[U:1:387291587]", 3),
+("[U:1:387291587]", 4),
+("[U:1:58021514]", 2) /* Lucas */,
+("[U:1:58021514]", 3),
+("[U:1:58021514]", 4),
+("[U:1:115545346]", 2) /* Me */,
+("[U:1:115545346]", 3),
+("[U:1:115545346]", 4),
+("[U:1:311817307]", 2) /* weeabruh */,
+("[U:1:311817307]", 3),
+("[U:1:311817307]", 4),
+("[U:1:167477095]", 2) /* Leo */,
+("[U:1:167477095]", 3),
+("[U:1:167477095]", 4),
+("[U:1:109869232]", 2) /* Nope */,
+("[U:1:109869232]", 3),
+("[U:1:109869232]", 4),
+("[U:1:143187699]", 2) /* Karii */,
+("[U:1:143187699]", 3),
+("[U:1:1010265126]", 2) /* sk8te */,
+("[U:1:1010265126]", 3),
+("[U:1:129770678]", 2) /* Bob */,
+("[U:1:105279633]", 2) /* Emm */,
+("[U:1:178424863]", 2) /* Seph */,
+("[U:1:67025950]", 2) /* Veret */,
+("[U:1:371533460]", 2) /* unrevoked */,
+("[U:1:210419507]", 2) /* nick7257 */,
+("[U:1:1213352566]", 2) /* cora */,
+("[U:1:1054371461]", 2) /* Herbert */,
+("[U:1:36989342]", 2) /* Pop'n'fresh */,
+("[U:1:136042535]", 2) /* Lord Vader */;

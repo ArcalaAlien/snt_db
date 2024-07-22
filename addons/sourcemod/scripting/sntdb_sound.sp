@@ -397,6 +397,10 @@ public void OnClientPutInServer(int client)
     GetClientAuthId(client, AuthId_Steam3, SteamId, 64);
     GetClientName(client, PlayerName, 128);
 
+    char sQuery[512];
+    Format(sQuery, 512, "SELECT ItemId FROM %sInventories WHERE SteamId=\'%s\'", StoreSchema, SteamId);
+    SQL_TQuery(DB_sntdb, SQL_CheckForSoundItems, sQuery, client);
+
     Player[client].SetAuthId(SteamId);
     Player[client].SetPlayerName(PlayerName);
 
@@ -407,10 +411,6 @@ public void OnClientPutInServer(int client)
     {
         GetSlotCookies(client, i);
     }
-    
-    char sQuery[512];
-    Format(sQuery, 512, "SELECT ItemId FROM %sInventories WHERE SteamId=\'%s\'", StoreSchema, SteamId);
-    SQL_TQuery(DB_sntdb, SQL_CheckForSoundItems, sQuery, client);
 
     char ConnectSound[256];
     PlayerSounds[client].GetSlotFile(3, ConnectSound, 256);
@@ -433,28 +433,31 @@ public void OnClientPutInServer(int client)
 
 public void OnClientDisconnect(int client)
 {
-    char DisconnectSound[256];
-    PlayerSounds[client].GetSlotFile(4, DisconnectSound, 256);
-
-    char PlayerName[128];
-    GetClientName(client, PlayerName, 128);
-
-    if (PlayerSounds[client].GetOwnsItem(0))
+    if (IsValidClient(client))
     {
-        for (int i = 1; i <= GetClientCount(); i++)
+        char DisconnectSound[256];
+        PlayerSounds[client].GetSlotFile(4, DisconnectSound, 256);
+
+        char PlayerName[128];
+        GetClientName(client, PlayerName, 128);
+
+        if (PlayerSounds[client].GetOwnsItem(0))
         {
-            if (i != client && !IsFakeClient(i))
+            for (int i = 1; i <= GetClientCount(); i++)
             {
-                if ((PlayerSounds[i].GetIsConnEnabled() == true) && !StrEqual(DisconnectSound, "NONE"))
+                if (i != client && !IsFakeClient(i))
                 {
-                    EmitSoundToClient(i, DisconnectSound);
-                    CPrintToChat(i, "%s {orange}%s {default}left the server!", Prefix, PlayerName);
+                    if ((PlayerSounds[i].GetIsConnEnabled() == true) && !StrEqual(DisconnectSound, "NONE"))
+                    {
+                        EmitSoundToClient(i, DisconnectSound);
+                        CPrintToChat(i, "%s {orange}%s {default}left the server!", Prefix, PlayerName);
+                    }
                 }
             }
         }
+        Player[client].Reset();
+        PlayerSounds[client].Reset();
     }
-    Player[client].Reset();
-    PlayerSounds[client].Reset();
 }
 
 public void OnPlayerDeath(Event event, const char[] name, bool dontBroadcast)
@@ -506,8 +509,8 @@ void SendEquipMenu_Native(Handle plugin, int numParams)
 {
     Panel EquipCategory = CreatePanel();
     EquipCategory.SetTitle("Choose a sound category:");
-    EquipCategory.DrawItem("Soundboard Sounds");
-    EquipCategory.DrawItem("Server Slot Sounds");
+    EquipCategory.DrawItem("Soundboard Slots");
+    EquipCategory.DrawItem("Server Sound Slots");
     EquipCategory.DrawText(" ");
     EquipCategory.DrawItem("Sound Menu");
     EquipCategory.DrawItem("Exit");
@@ -901,8 +904,8 @@ public int SoundPanel_Handler(Menu menu, MenuAction action, int param1, int para
                 {
                     Panel EquipCategory = CreatePanel();
                     EquipCategory.SetTitle("Choose a sound category:");
-                    EquipCategory.DrawItem("Soundboard Sounds");
-                    EquipCategory.DrawItem("Server Slot Sounds");
+                    EquipCategory.DrawItem("Soundboard Slots");
+                    EquipCategory.DrawItem("Server Sound Slots");
                     EquipCategory.DrawText(" ");
                     EquipCategory.DrawItem("Sound Menu");
                     EquipCategory.DrawItem("Exit");

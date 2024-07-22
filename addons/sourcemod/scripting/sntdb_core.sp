@@ -9,17 +9,19 @@
 
 #include <morecolors>
 
-#define MSG01 "Have an issue with a player? Report them to an admin on our discord server!\nUse {greenyellow}discord.gg/xnuHA5KsEU{default} to join us and make a post in #public-staff-chat!"
-#define MSG02 "Are there no admins currently online? Use /votemenu to start votes against problematic players!\n{fullred}ABUSE OF VOTEMENU WILL RESULT IN REVOCATION OF VOTEMENU PRIVILEGES."
-#define MSG03 "Welcome to {greenyellow}Surf{default}'n'{orange}Turf! Join our discord community at {greenyellow}discord.gg/xnuHA5KsEU{default}!"
+#define MSG01 "Have an issue with a player? Report them to an admin on our discord server!Use {greenyellow}discord.gg/xnuHA5KsEU{default} to join us and make a post in #public-staff-chat!"
+#define MSG02 "Are there no admins currently online? Use {greenyellow}/votemenu to start votes against problematic players!\n{fullred}ABUSE OF VOTEMENU WILL RESULT IN REVOCATION OF VOTEMENU PRIVILEGES."
+#define MSG03 "Welcome to {greenyellow}Surf'n'Turf!{default}\nJoin our discord community at {greenyellow}discord.gg/xnuHA5KsEU{default}!"
 #define MSG04 "Want an easy way to set up your custom items? Do {greenyellow}/equip{default} to access all custom item menus easily!"
 #define MSG05 "Want a change of scenery? Use {greenyellow}/rtv {default}to vote to change the map!"
-#define MSG06 "We have a huge selection of maps! Check it out using {greenyellow}/nominate!\n{default}Custom maps made for the server specifically will be at the top of the list!"
-#define MSG07 "Due to the 64 bit update some of our features are currently broken.\nWe are working dilligently in the background to get everything up and running again!"
+#define MSG06 "We have a huge selection of maps! Check it out using {greenyellow}/nominate!"
+#define MSG07 "Bored? Type {greenyellow}rtd{default} in chat to get a random effect!"
 #define MSG08 "New to the server? Use {greenyellow}/info{default} to open the info menu!"
 #define MSG09 "Sail yerself to the {greenyellow}/tavern{default} ta check out their wares!"
 #define MSG10 "Wanna check to see what ye've got in yer coffers? Do {greenyellow}/treasure{default} to find out!"
 #define MSG11 "Wanna know how to use those sounds you bought from the store?\nBind keys to {greenyellow}sm_playslot1, sm_playslot2, & sm_playslot3 {default}to use our in-server soundboard!"
+#define MSG12 "Give us your feedback! Use {greenyellow}/rate {default}to give a map a rating of 1-5 stars!"
+#define MSG13 "Don't like the speedometer? Use {greenyellow}/speedo{default} to toggle it on and off!"
 
 public Plugin myinfo =
 {
@@ -35,6 +37,10 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 
     CreateNative("LoadSQLConfigs", ReadSQLConfigs);
     CreateNative("LoadSQLStoreConfigs", ReadSQLStoreConfigs);
+    CreateNative("GetServerTime", GetServerTime_Native);
+    CreateNative("GetServerDay", GetServerDay_Native);
+    CreateNative("CheckForWeekend", CheckWeekend_Native);
+    CreateNative("IsValidClient",   IsValidClient_Native);
     RegPluginLibrary("sntdb_core");
 
     return APLRes_Success;
@@ -108,7 +114,6 @@ int  TimeLeft;
 
 int PlayerJoined[MAXPLAYERS+1];
 Handle InfoTimer = INVALID_HANDLE;
-Handle InfoTimer2 = INVALID_HANDLE;
 
 // Convars
 ConVar TimeBetweenMessages;
@@ -153,6 +158,7 @@ public void OnPluginStart()
     EventCooldown = CreateConVar("snt_event_cooldown", "480", "The cooldown time in seconds between events.", 0, true, 300.0);
     TimeBetweenMessages = CreateConVar("snt_msg_cooldown", "300", "The amount in seconds between each info message in chat.", 0, true, 180.0);
 
+    RegConsoleCmd("sm_info", USR_OpenInfoMenu, "Usage: /info Opens the server info menu!");
     //RegAdminCmd("sm_snt_events",    ADM_OpenEventsMenu,      ADMFLAG_GENERIC,    "/snt_events: Use this to open the events menu.");
     //RegAdminCmd("sm_datetest",     ADM_TestPlugin,          ADMFLAG_GENERIC,    "test this bitch");
     //RegAdminCmd("sm_snt_groupmod",  ADM_ModGroup,           ADMFLAG_BAN,        "/snt_groupmod <gid> <user>: Toggle a user's group id. Type list with no user to list all groups");
@@ -161,13 +167,12 @@ public void OnPluginStart()
 public void OnMapStart()
 {
     InfoTimer = CreateTimer(TimeBetweenMessages.FloatValue, Timer_DisplayInfo, 0, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
-    InfoTimer2 = CreateTimer((TimeBetweenMessages.FloatValue + 60.0), Timer_DisplayInfo2, 0, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
 }
 
 public void OnMapEnd()
 {
-    KillTimer(InfoTimer);
-    KillTimer(InfoTimer2);
+    if (InfoTimer != INVALID_HANDLE)
+        KillTimer(InfoTimer);
 }
 
 public void OnPlayerTeam(Event event, const char[] name, bool dontBroadcast)
@@ -175,21 +180,20 @@ public void OnPlayerTeam(Event event, const char[] name, bool dontBroadcast)
     int uid = GetEventInt(event, "userid");
     int client = GetClientOfUserId(uid);
 
-    if (!IsFakeClient(client))
-    {
+    if (ValidateClient(client))
         CreateTimer(5.0, Timer_WelcomeMessage, client);
-    }
 }
 
 public void OnClientDisconnect(int client)
 {
-    PlayerJoined[client] = 0;
+    if (ValidateClient(client))
+        PlayerJoined[client] = 0;
 }
 
-public Action CP_OnChatMessage(int& author, ArrayList recipients, char[] flagstring, char[] name, char[] message, bool& processcolors, bool& removecolors)
+public Action CP_OnChatMessage(int& author, ArrayList recipients, char[] flagstring, char[] name, char[] message, bool & processcolors, bool & removecolors)
 {
     char DateSent[32];
-    FormatTime(DateSent, 32, "%c", GetTime());
+    FormatTime(DateSent, 32, "%A %D %R:%S", GetTime());
 
     char SteamId[64];
     GetClientAuthId(author, AuthId_Steam3, SteamId, 64);
@@ -200,58 +204,144 @@ public Action CP_OnChatMessage(int& author, ArrayList recipients, char[] flagstr
     SQL_EscapeString(DB_sntdb, message, MessageEsc, 513);
 
     char iQuery[1024];
-    Format(iQuery, 512, "INSERT INTO %slogs VALUES (\'%s\', \'%s\', \'%s\', \'%s\')", DateSent, SteamId, NameEsc, MessageEsc);
+    Format(iQuery, 1024, "INSERT INTO %slogs VALUES (\'%s\', \'%s\', \'%s\', \'%s\')", SchemaName, DateSent, SteamId, NameEsc, MessageEsc);
     SQL_TQuery(DB_sntdb, SQL_ErrorHandler, iQuery);
 
     return Plugin_Changed;
 }
 
-bool CheckWeekend(char[] day)
+void BuildInfo_Page1(int client)
 {
-    if (StrEqual(day, "friday", false) || StrEqual(day, "saturday", false) || StrEqual(day, "sunday", false))
-    {
+    Menu InfoPage1 = new Menu(InfoPage1_Handler, MENU_ACTIONS_DEFAULT);
+    InfoPage1.SetTitle("Info Menu");
+    InfoPage1.AddItem("1", "Staff Members");
+    InfoPage1.AddItem("2", "Discord Link");
+    InfoPage1.AddItem("3", "Current Server Features");
+    InfoPage1.AddItem("4", "How To Surf");
+    InfoPage1.AddItem("5", "How To Use Sounds");
+    InfoPage1.Display(client, 0);
+}
+
+bool ValidateClient(int client)
+{
+    if (IsClientConnected(client) && IsClientInGame(client) && !IsFakeClient(client))
         return true;
-    }
     else
-    {
         return false;
-    }
 }
 
-void CheckHoliday(char[] cur_month, char[] cur_day)
+void GetServerTime(int zone, char[] current_time, int maxlen)
 {
-    int month = StringToInt(cur_month);
-    int day = StringToInt(cur_day);
-    switch (month)
+    int currentTime = GetTime();
+
+    switch (zone)
     {
-        case 4:
+        case 0:
         {
-            if (day == 20)
-            {
-                CurrentHoliday = "420";
-            }
+            //EST, -4 hours
+            currentTime = currentTime - (4*60*60);
+            FormatTime(current_time, maxlen, "%H:%M %p", currentTime);
         }
-        case 7:
+        case 1:
         {
-            if (day == 14)
-            {
-                CurrentHoliday = "Birthday";
-            }
+            //PST -7 hours
+            currentTime = currentTime - (7*60*60);
+            FormatTime(current_time, maxlen, "%H:%M %p", currentTime);
         }
-        case 10:
+        case 2:
         {
-            if (day == 31)
-            {
-                CurrentHoliday = "Halloween";
-            }
+            //CET +2 hours
+            currentTime = currentTime + (2*60*60);
+            FormatTime(current_time, maxlen, "%H:%M %p", currentTime);
         }
     }
 }
 
-int ReadSQLConfigs(Handle plugin, int numParams)
+void GetServerDay(char[] current_day, int maxlen)
 {
-    PrintToServer("[SNT] Loading SQL configs");
+    FormatTime(current_day, maxlen, "%A", GetTime());
+}
 
+bool CheckWeekend()
+{
+    char currentDay[16];
+    GetServerDay(currentDay, 16);
+
+    if (StrEqual(currentDay, "friday", false) || StrEqual(currentDay, "saturday", false) || StrEqual(currentDay, "sunday", false))
+        return true;
+    else
+        return false;
+}
+
+public void GetServerTime_Native(Handle plugin, int params)
+{
+    int currentTime = GetTime();
+
+    switch (GetNativeCell(1))
+    {
+        case 0:
+        {
+            //EST, -4 hours
+            currentTime = currentTime - (4*60*60);
+            char currentTimeStr[32];
+            FormatTime(currentTimeStr, 32, "%H:%M %p", currentTime)
+
+            SetNativeString(2, currentTimeStr, GetNativeCell(3));
+        }
+        case 1:
+        {
+            //PST -7 hours
+            currentTime = currentTime - (7*60*60);
+            char currentTimeStr[32];
+            FormatTime(currentTimeStr, 32, "%H:%M %p", currentTime)
+
+            SetNativeString(2, currentTimeStr, GetNativeCell(3));
+        }
+        case 2:
+        {
+            //CET +2 hours
+            currentTime = currentTime + (2*60*60);
+            char currentTimeStr[32];
+            FormatTime(currentTimeStr, 32, "%H:%M %p", currentTime)
+
+            SetNativeString(2, currentTimeStr, GetNativeCell(3));
+        }
+    }
+}
+
+public void GetServerDay_Native(Handle plugin, int params)
+{
+    int currentTime = GetTime();
+    char currentDay[16];
+    FormatTime(currentDay, 32, "%A", currentTime);
+
+    SetNativeString(1, currentDay, GetNativeCell(2));
+}
+
+public any CheckWeekend_Native(Handle plugin, int params)
+{
+    char currentDay[16];
+    GetServerDay(currentDay, 16);
+
+    PrintToServer(currentDay);
+
+    if (StrEqual(currentDay, "friday", false) || StrEqual(currentDay, "saturday", false) || StrEqual(currentDay, "sunday", false))
+        return true;
+    else
+        return false;
+}
+
+public any IsValidClient_Native(Handle plugin, int params)
+{
+    int client = GetNativeCell(1)
+    if (IsClientConnected(client) && IsClientInGame(client) && !IsFakeClient(client))
+        return true;
+    else
+        return false;
+}
+
+public any ReadSQLConfigs(Handle plugin, int numParams)
+{
     KeyValues ConfigFile = new KeyValues("ConfigFile");
     char ConfigFilePath[PLATFORM_MAX_PATH];
     BuildPath(Path_SM, ConfigFilePath, sizeof(ConfigFilePath), "configs/sntdb/main_config.cfg");
@@ -261,7 +351,7 @@ int ReadSQLConfigs(Handle plugin, int numParams)
     if (ConfigFile == null)
     {
         PrintToServer("[SNT] ERROR! \"configs/sntdb/main_config.cfg\": file does not exist!");
-        return 0;
+        return false;
     }
 
     char ModuleName[32];
@@ -271,7 +361,7 @@ int ReadSQLConfigs(Handle plugin, int numParams)
     {
         PrintToServer("[SNT] ERROR! Missing \"System\" section from config file.");
         delete ConfigFile;
-        return 0;
+        return false;
     }
     else
     {
@@ -316,13 +406,11 @@ int ReadSQLConfigs(Handle plugin, int numParams)
             SetNativeString(9, store_schema, GetNativeCell(10));
         }
     }
-    return 1;
+    return true;
 }
 
-int ReadSQLStoreConfigs(Handle plugin, int numParams)
+public any ReadSQLStoreConfigs(Handle plugin, int numParams)
 {
-    PrintToServer("[SNT] Loading SQL configs");
-
     KeyValues ConfigFile = new KeyValues("ConfigFile");
     char ConfigFilePath[PLATFORM_MAX_PATH];
     BuildPath(Path_SM, ConfigFilePath, sizeof(ConfigFilePath), "configs/sntdb/main_config.cfg");
@@ -335,14 +423,14 @@ int ReadSQLStoreConfigs(Handle plugin, int numParams)
     if (ConfigFile == null)
     {
         PrintToServer("[SNT] ERROR! \"configs/sntdb/main_config.cfg\": file does not exist!");
-        return 0;
+        return false;
     }
 
     if (!ConfigFile.JumpToKey("Store"))
     {
         PrintToServer("[SNT] ERROR! Missing \"Store\" section from config file.");
         delete ConfigFile;
-        return 0;
+        return false;
     }
     else
     {
@@ -386,7 +474,275 @@ int ReadSQLStoreConfigs(Handle plugin, int numParams)
 
         delete ConfigFile;
     }
-    return 1;
+    return true;
+}
+
+void BuildFeaturesMenu(int client)
+{
+    Menu FeaturesList_Menu = new Menu(FeaturesList_Handler, MENU_ACTIONS_DEFAULT);
+    FeaturesList_Menu.SetTitle("Surf'n'Turf Features")
+    FeaturesList_Menu.AddItem("1", "Store");
+    FeaturesList_Menu.AddItem("2", "Soundboard");
+    FeaturesList_Menu.AddItem("3", "Map Rating System");
+    FeaturesList_Menu.AddItem("4", "Ranking System");
+    FeaturesList_Menu.AddItem("5", "Micspam System (COMING SOON!)");
+    FeaturesList_Menu.AddItem("6", "Ignore System");
+    FeaturesList_Menu.AddItem("7", "Collision Plugin");
+    FeaturesList_Menu.AddItem("8", "Killstreak Modifer");
+    FeaturesList_Menu.AddItem("9", "Third Person Plugin");
+    FeaturesList_Menu.AddItem("10", "RTD");
+    FeaturesList_Menu.Display(client, 0);
+}
+
+public int StaffPanel_Handler(Menu menu, MenuAction action, int param1, int param2)
+{
+    switch (action)
+    {
+        case MenuAction_Select:
+        {
+            switch (param2)
+            {
+                case 1:
+                {
+                    CPrintToChat(param1, "%s LucasDoofus' Steam Profile: {greenyellow}https://steamcommunity.com/id/LucasDoofus/", Prefix);
+                    delete menu;
+                }
+                case 2:
+                {
+                    CPrintToChat(param1, "%s WebmasterMatt's Steam Profile: {greenyellow}https://steamcommunity.com/id/pnelegonerd/", Prefix);
+                    delete menu;
+                }
+                case 3:
+                {
+                    CPrintToChat(param1, "%s Arcala The Gyiyg's Steam Profile: {greenyellow}https://steamcommunity.com/id/ArcalaAlien/", Prefix);
+                    delete menu;
+                }
+                case 4:
+                {
+                    CPrintToChat(param1, "%s weeabruh's Steam Profile: {greenyellow}https://steamcommunity.com/id/weeabruv/", Prefix);
+                    delete menu;
+                }
+                case 5:
+                {
+                    CPrintToChat(param1, "%s twerp's Steam Profile: {greenyellow}https://steamcommunity.com/profiles/76561198347557315/", Prefix);
+                    delete menu;
+                }
+                case 6:
+                    BuildInfo_Page1(param1);
+                case 7:
+                    delete menu;
+            }
+        }
+        case MenuAction_End:
+            delete menu;
+    }
+    return 0;
+}
+
+public int PluginInfo_Handler(Menu menu, MenuAction action, int param1, int param2)
+{
+    switch (action)
+    {
+        case MenuAction_Select:
+        {
+            if (param2 == 1)
+                BuildFeaturesMenu(param1);
+        }
+    }
+    return 0;
+}
+
+public int FeaturesList_Handler(Menu menu, MenuAction action, int param1, int param2)
+{
+    switch (action)
+    {
+        case MenuAction_Select:
+        {
+            char chosenOpt[32];
+            GetMenuItem(menu, param2, chosenOpt, 32);
+            int opt = StringToInt(chosenOpt);
+
+            Panel pluginInfoPanel = CreatePanel();
+
+            switch (opt)
+            {
+                case 1:
+                {
+                    pluginInfoPanel.SetTitle("Store Plugin");
+                    pluginInfoPanel.DrawText(" ");
+                    pluginInfoPanel.DrawText("Use /tavern or /store to open up the server's\nin game store!");
+                    pluginInfoPanel.DrawText("You earn dubloons just by playing the game!");
+                    pluginInfoPanel.DrawText("View the items you've bought\nand your dubloons by using /treasure!");
+                    pluginInfoPanel.DrawText(" ");
+                    pluginInfoPanel.DrawItem("Plugin Info Menu");
+                    pluginInfoPanel.DrawItem("Exit");
+                }
+                case 2:
+                {
+                    pluginInfoPanel.SetTitle("Soundboard Plugin");
+                    pluginInfoPanel.DrawText(" ");
+                    pluginInfoPanel.DrawText("After you purchase sounds in the store\nuse /sounds to open the soundboard menu!");
+                    pluginInfoPanel.DrawText("To use your soundboard slots, bind 3 keys to\nsm_playslot1, sm_playslot2, and sm_playslot3.");
+                    pluginInfoPanel.DrawText("Press the key you bound the\nsound to in game and it'll play the sound!");
+                    pluginInfoPanel.DrawText(" ");
+                    pluginInfoPanel.DrawItem("Plugin Info Menu");
+                    pluginInfoPanel.DrawItem("Exit");
+                }
+                case 3:
+                {
+                    pluginInfoPanel.SetTitle("Map Rating System");
+                    pluginInfoPanel.DrawText(" ");
+                    pluginInfoPanel.DrawText("Use /rate to open up the map rating menu!\nHere you can rate a map 1-5 stars.");
+                    pluginInfoPanel.DrawText("You can also view the top and bottom 10 rated maps!\nYou can use /ratemap as a shortcut to rate the current map.");
+                    pluginInfoPanel.DrawText(" ");
+                    pluginInfoPanel.DrawItem("Plugin Info Menu");
+                    pluginInfoPanel.DrawItem("Exit");
+                }
+                case 4:
+                {
+                    pluginInfoPanel.SetTitle("Ranking System");
+                    pluginInfoPanel.DrawText(" ");
+                    pluginInfoPanel.DrawText("You get points for killing players on the server!\nThere's also an internal killstreak system that will\nmodify the amount of points you get, based on your ks.");
+                    pluginInfoPanel.DrawText("Use /rank to access the menu and look at your\nand other player's ranks!");
+                    pluginInfoPanel.DrawText(" ");
+                    pluginInfoPanel.DrawItem("Plugin Info Menu");
+                    pluginInfoPanel.DrawItem("Exit");
+                }
+                case 5:
+                {
+                    pluginInfoPanel.SetTitle("Micspam System (COMING SOON)");
+                    pluginInfoPanel.DrawText(" ");
+                    pluginInfoPanel.DrawText("Not implemented, this will create a micspam\nqueue that players will need to join\nusing /join. This is to prevent overspamming.");
+                    pluginInfoPanel.DrawText(" ");
+                    pluginInfoPanel.DrawItem("Plugin Info Menu");
+                    pluginInfoPanel.DrawItem("Exit");
+                }
+                case 6:
+                {
+                    pluginInfoPanel.SetTitle("Ignore System");
+                    pluginInfoPanel.DrawText(" ");
+                    pluginInfoPanel.DrawText("Use /i or /ignore to open the ignore menu\nand ignore a player's voice chat only!");
+                    pluginInfoPanel.DrawText("Working on adding a player targeting feature.");
+                    pluginInfoPanel.DrawText(" ");
+                    pluginInfoPanel.DrawItem("Plugin Info Menu");
+                    pluginInfoPanel.DrawItem("Exit");
+                }
+                case 7:
+                {
+                    pluginInfoPanel.SetTitle("Collision Plugin");
+                    pluginInfoPanel.DrawText(" ");
+                    pluginInfoPanel.DrawText("Slam into your friends at high speeds and kill them!");
+                    pluginInfoPanel.DrawText(" ");
+                    pluginInfoPanel.DrawItem("Plugin Info Menu");
+                    pluginInfoPanel.DrawItem("Exit");
+                }
+                case 8:
+                {
+                    pluginInfoPanel.SetTitle("Killstreak Modifier");
+                    pluginInfoPanel.DrawText(" ");
+                    pluginInfoPanel.DrawText("Use /ks <num> to set your TF2 killstreak to\nthe specified number! Useful if you have KS items.");
+                    pluginInfoPanel.DrawText(" ");
+                    pluginInfoPanel.DrawItem("Plugin Info Menu");
+                    pluginInfoPanel.DrawItem("Exit");
+                }
+                case 9:
+                {
+                    pluginInfoPanel.SetTitle("Third Person Plugin");
+                    pluginInfoPanel.DrawText(" ");
+                    pluginInfoPanel.DrawText("Use /1, /fp, /firstperson\nor /3, /tp, /thirdperson to toggle between first and third person!");
+                    pluginInfoPanel.DrawText(" ");
+                    pluginInfoPanel.DrawItem("Plugin Info Menu");
+                    pluginInfoPanel.DrawItem("Exit");
+                }
+                case 10:
+                {
+                    pluginInfoPanel.SetTitle("Roll The Dice (RTD)");
+                    pluginInfoPanel.DrawText(" ");
+                    pluginInfoPanel.DrawText("Say rtd in chat to get a random effect applied to you!\nIt could be good, or bad, you just gotta take a chance!");
+                    pluginInfoPanel.DrawText(" ");
+                    pluginInfoPanel.DrawItem("Plugin Info Menu");
+                    pluginInfoPanel.DrawItem("Exit");
+                }
+            }
+            pluginInfoPanel.Send(param1, PluginInfo_Handler, 0);
+        }
+    }
+    return 0;
+}
+
+public int HowToSurf_Handler(Menu menu, MenuAction action, int param1, int param2)
+{
+    switch (action)
+    {
+        case MenuAction_Select:
+        {
+            if (param2 == 1)
+                BuildInfo_Page1(param1);
+        }
+    }
+    return 0;
+}
+
+public int InfoPage1_Handler(Menu menu, MenuAction action, int param1, int param2)
+{
+    switch (action)
+    {
+        case MenuAction_Select:
+        {
+            char chosenOpt[32];
+            GetMenuItem(menu, param2, chosenOpt, 32);
+            int opt = StringToInt(chosenOpt);
+
+            switch (opt)
+            {
+                case 1:
+                {
+                    Panel StaffList_Panel = CreatePanel();
+                    StaffList_Panel.SetTitle("Surf'n'Turf Staff Members");
+                    StaffList_Panel.DrawText(" ");
+                    StaffList_Panel.DrawText("Owners / Admins");
+                    StaffList_Panel.DrawItem("LucasDoofus");
+                    StaffList_Panel.DrawItem("Webmaster Matt");
+                    StaffList_Panel.DrawItem("Arcala the Gyiyg");
+                    StaffList_Panel.DrawText("");
+                    StaffList_Panel.DrawText("Moderators");
+                    StaffList_Panel.DrawItem("Weeabruh");
+                    StaffList_Panel.DrawItem("twerp");
+                    StaffList_Panel.DrawText("");
+                    StaffList_Panel.DrawItem("Info Menu");
+                    StaffList_Panel.DrawItem("Exit");
+                    StaffList_Panel.Send(param1, StaffPanel_Handler, 0);
+                }
+                case 2:
+                    CPrintToChat(param1, "%s You can join our discord community at {greenyellow}discord.gg/xnuHA5KsEU{default}!", Prefix);
+                case 3:
+                    BuildFeaturesMenu(param1);
+                case 4:
+                {
+                    Panel HowToSurf_Panel = CreatePanel();
+                    HowToSurf_Panel.SetTitle("How to Surf");
+                    HowToSurf_Panel.DrawText(" ");
+                    HowToSurf_Panel.DrawText("Pretend this is the ramp: /\\");
+                    HowToSurf_Panel.DrawText("Depending on what side of the ramp you're on\nyou'll hold A or D");
+                    HowToSurf_Panel.DrawText("");
+                    HowToSurf_Panel.DrawText("D /\\ A");
+                    HowToSurf_Panel.DrawText("");
+                    HowToSurf_Panel.DrawText("Then you use your mouse to guide where you're going.\nTry to follow the curvature of the ramp as close as possible.");
+                    HowToSurf_Panel.DrawText("Holding crouch is helpful to clear walls, and if you press S you'll stop in midair.");
+                    HowToSurf_Panel.DrawText("DO NOT HOLD W!! YOU WILL FALL OFF THE RAMP IF YOU DO!");
+                    HowToSurf_Panel.DrawItem("Info Menu");
+                    HowToSurf_Panel.DrawItem("Exit");
+                    HowToSurf_Panel.Send(param1, HowToSurf_Handler, 0);
+                }
+                case 5:
+                {
+                    CPrintToChat(param1, "%s First set your sounds using {greenyellow}/sound\nThen bind 3 keys to {greenyellow}sm_playslot1, sm_playslot2, and sm_playslot3\n{default}Then press the keys you bound the commands to play the sounds!", Prefix);
+                }
+            }
+            
+        }
+    }
+    return 0;
 }
 
 public int EventMenuHandler(Menu menu, MenuAction action, int param1, int param2)
@@ -405,55 +761,26 @@ public void SQL_ErrorHandler(Database db, DBResultSet results, const char[] erro
 
 public Action Timer_WelcomeMessage(Handle timer, any data)
 {
-    char CurrentHour[4];
-    char CurrentMinute[4];
-    char AMPM[4];
-    char CurrentMonth[4];
-    char CurrentDay[4];
-    char DayOfWeek[16];
+    // char timeEST[16];
+    // char timePST[16];
+    // char timeCET[16];
+    char currentDay[16];
+    char currentDate[16];
 
-    FormatTime(CurrentHour, 4, "%I", GetTime());
-    FormatTime(CurrentMinute, 4, "%M", GetTime());
-    FormatTime(AMPM, 4, "%p", GetTime());
-    FormatTime(CurrentMonth, 4, "%m", GetTime());
-    FormatTime(CurrentDay, 4, "%d", GetTime());
-    FormatTime(DayOfWeek, 16, "%A", GetTime());
+    FormatTime(currentDate, 16, "%m/%d", GetTime());
+    GetServerDay(currentDay, 16);
+    // GetServerTime(0, timeEST, 16);
+    // GetServerTime(1, timePST, 16);
+    // GetServerTime(2, timeCET, 16);
 
-    int CESTHour = StringToInt(CurrentHour);
-    int ESTHour = StringToInt(CurrentHour);
-    int PSTHour = StringToInt(CurrentHour);
-    CESTHour += 2;
-    ESTHour -= 4;
-    PSTHour -= 7;
-
-    char CESTAMPM[4];
-    char ESTAMPM[4];
-    char PSTAMPM[4];
-
-    // if (CESTHour > StringToInt(CurrentHour) && StringToInt(CurrentHour) < 12 && StrEqual(AMPM, "AM"))
-    //     strcopy(CESTAMPM, 4, "PM");
-    // else if (CESTHour < StringToInt(CurrentHour) && StringToInt(CurrentHour) < 12 && StrEqual(AMPM, "PM"))
-    //     strcopy(CESTAMPM, 4, "AM");
-
-    // if (CESTHour > ESTHour && ESTHour < 12 && StrEqual(AMPM, "PM"))
-    //     strcopy(ESTAMPM, 4, "AM");
-    // else if (CESTHour > ESTHour && ESTHour < 12 && StrEqual(AMPM, "AM"))
-    //     strcopy(ESTAMPM, 4, "PM");
-
-    // if (ESTHour > PSTHour && PSTHour < 12 && StrEqual(AMPM, "PM"))
-    //     strcopy(PSTAMPM, 4, "AM");
-    // else if (ESTHour > PSTHour && PSTHour < 12 && StrEqual(AMPM, "AM"))
-    //     strcopy(PSTAMPM, 4, "PM");
-
-    CheckHoliday(CurrentMonth, CurrentDay);
-
-    if (PlayerJoined[data] != 1)
+    if (PlayerJoined[data] != 1 && ValidateClient(data))
     {
         char PlayerName[128];
         GetClientName(data, PlayerName, 128);
         EmitSoundToClient(data, "snt_sounds/ypp_login.mp3");
         CPrintToChat(data, "{yellowgreen}Ahoy! Welcome ye to the crew, {default}%s!", PlayerName);
-        CPrintToChat(data, "%s The date is: {orange}%s %s/%s", Prefix, DayOfWeek, CurrentMonth, CurrentDay);
+        CPrintToChat(data, "%s The date is: {orange}%s %s", Prefix, currentDay, currentDate);
+        //CPrintToChat(data, "%s EST: {orange}%s{default} PST: {orange}%s{default} CET: {orange}%s{default}", Prefix, timeEST, timePST, timeCET);
         //CPrintToChat(data, "The current time is {rblxlightblue}%i:%s %s CEST\n{yellowgreen}%i:%s %s EST, {orange}%i:%s %s PST", CESTHour, CurrentMinute, CESTAMPM, ESTHour, CurrentMinute, ESTAMPM, PSTHour, CurrentMinute, PSTAMPM);
         PlayerJoined[data] = 1;
     }
@@ -462,7 +789,7 @@ public Action Timer_WelcomeMessage(Handle timer, any data)
 
 public Action Timer_DisplayInfo(Handle timer, any data)
 {
-    int MsgToDisplay = GetRandomInt(1, 5);
+    int MsgToDisplay = GetRandomInt(1, 13);
 
     char HintMessage[256];
     switch (MsgToDisplay)
@@ -477,31 +804,22 @@ public Action Timer_DisplayInfo(Handle timer, any data)
             Format(HintMessage, 256, "%s %s", Prefix, MSG04);
         case 5:
             Format(HintMessage, 256, "%s %s", Prefix, MSG05);
-    }
-
-    CPrintToChatAll(HintMessage);
-    return Plugin_Continue;
-}
-
-public Action Timer_DisplayInfo2(Handle timer, any data)
-{
-    int MsgToDisplay = GetRandomInt(1, 6);
-
-    char HintMessage[256];
-    switch (MsgToDisplay)
-    {
-        case 1:
-            Format(HintMessage, 256, "%s %s", Prefix, MSG06);
-        case 2:
-            Format(HintMessage, 256, "%s %s", Prefix, MSG07);
-        case 3:
-            Format(HintMessage, 256, "%s %s", Prefix, MSG08);
-        case 4:
-            Format(HintMessage, 256, "%s %s", Prefix, MSG09);
-        case 5:
-            Format(HintMessage, 256, "%s %s", Prefix, MSG10);
         case 6:
+            Format(HintMessage, 256, "%s %s", Prefix, MSG06);
+        case 7:
+            Format(HintMessage, 256, "%s %s", Prefix, MSG07);
+        case 8:
+            Format(HintMessage, 256, "%s %s", Prefix, MSG08);
+        case 9:
+            Format(HintMessage, 256, "%s %s", Prefix, MSG09);
+        case 10:
+            Format(HintMessage, 256, "%s %s", Prefix, MSG10);
+        case 11: 
             Format(HintMessage, 256, "%s %s", Prefix, MSG11);
+        case 12:
+            Format(HintMessage, 256, "%s %s", Prefix, MSG12);
+        case 13:
+            Format(HintMessage, 256, "%s %s", Prefix, MSG13);
     }
 
     CPrintToChatAll(HintMessage);
@@ -540,5 +858,22 @@ public Action ADM_OpenEventsMenu(int client, int args)
     }
 
     EventMenu.Display(client, MENU_TIME_FOREVER);
+    return Plugin_Handled;
+}
+
+public Action USR_OpenInfoMenu (int client, int args)
+{
+    if (client == 0)
+        return Plugin_Handled;
+
+    if (args > 0)
+    {
+        EmitSoundToClient(client, "snt_sounds/ypp_sting.mp3");
+        CPrintToChat(client, "%s Usage: {greenyellow}/info{default} Opens the info menu!", Prefix);
+        return Plugin_Handled;
+    }
+
+    if (ValidateClient(client))
+        BuildInfo_Page1(client)
     return Plugin_Handled;
 }

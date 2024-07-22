@@ -29,4 +29,20 @@ native void OpenStoreMenu(int client);
  */
 native void OpenInventoryMenu(int client);
 
+/**
+ * Get a client's name color.
+ * 
+ * @param client        Client index
+ * @param colorBuffer   char buffer for client's name color.
+ * @param maxlen        length of char buffer
+ */
+native void GetClientNameColor(int client, char[] colorBuffer, int maxlen);
 
+/**
+ * Get a client's chat color.
+ * 
+ * @param client        Client index
+ * @param colorBuffer   char buffer for client's chat color.
+ * @param maxlen        length of char buffer
+ */
+native void GetClientChatColor(int client, char[] colorBuffer, int maxlen);

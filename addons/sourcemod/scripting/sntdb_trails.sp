@@ -251,7 +251,7 @@ Cookie ck_TrailColor;
 Cookie ck_TrailWidth;
 
 PlayerTrail EqpdTrail[MAXPLAYERS + 1];
-TrailInfo Trails[32];
+TrailInfo Trails[128];
 
 public void OnPluginStart()
 {
@@ -294,9 +294,12 @@ public void OnClientPutInServer(int client)
 
 public void OnClientDisconnect(int client)
 {
-    if (EqpdTrail[client].EntityIndex != -1)
-        KillTrail(client);
-    EqpdTrail[client].Reset();
+    if (IsValidClient(client))
+    {
+        if (EqpdTrail[client].EntityIndex != -1)
+            KillTrail(client);
+        EqpdTrail[client].Reset();
+    }
 }
 
 public void OnPlayerSpawn(Event event, const char[] name, bool dontBroadcast)
@@ -304,11 +307,16 @@ public void OnPlayerSpawn(Event event, const char[] name, bool dontBroadcast)
     // if user is showing their trail, enable it again.
     int uid = GetEventInt(event, "userid");
     int client = GetClientOfUserId(uid);
-    if (EqpdTrail[client].EntityIndex != -1)
-        UpdateTrail(client);
-    else
-        CreateTrail(client);
-    CreateTimer(0.1, Timer_ShowSprite, client);
+    if (EqpdTrail[client].Showing)
+    {
+        if (EqpdTrail[client].EntityIndex != -1)
+            UpdateTrail(client);
+        else
+        {
+            CreateTrail(client);
+            CreateTimer(0.1, Timer_ShowSprite, client);
+        }
+    }
 }
 
 public void OnPlayerDeath(Event event, const char[] name, bool dontBroadcast)
@@ -316,23 +324,20 @@ public void OnPlayerDeath(Event event, const char[] name, bool dontBroadcast)
     // Disable trail when player dies
     int uid = GetEventInt(event, "userid");
     int client = GetClientOfUserId(uid);
-    KillTrail(client);
+    if (EqpdTrail[client].TrailIndex != -1)
+        KillTrail(client);
 }
 
 public void TF2_OnConditionAdded(int client, TFCond condition)
 {
-    if (condition == TFCond_Cloaked)
-    {
+    if (condition == TFCond_Cloaked && EqpdTrail[client].TrailIndex != -1)
         KillTrail(client);
-    }
 }
 
 public void TF2_OnConditionRemoved(int client, TFCond condition)
 {
-    if (condition == TFCond_Cloaked)
-    {
+    if (condition == TFCond_Cloaked && EqpdTrail[client].TrailIndex == -1)
         CreateTrail(client);
-    }
 }
 
 void CreateTrail(int client)
@@ -384,7 +389,8 @@ void CreateTrail(int client)
     TeleportEntity(ent_trail, PlayerOrigin, NULL_VECTOR);
 
     SetVariantString("!activator");
-    AcceptEntityInput(ent_trail, "SetParent", client);
+    if (ent_trail != -1)
+        AcceptEntityInput(ent_trail, "SetParent", client);
 
     SetEntPropFloat(ent_trail, Prop_Send, "m_flTextureRes", 0.05);
 }
@@ -406,7 +412,9 @@ public Action Timer_CreateTrail(Handle timer, any client)
 
 public Action Timer_ShowSprite(Handle timer, any client)
 {
-    AcceptEntityInput(EqpdTrail[client].EntityIndex, "ShowSprite");
+    if (EqpdTrail[client].EntityIndex != -1)
+        AcceptEntityInput(EqpdTrail[client].EntityIndex, "ShowSprite");
+
     return Plugin_Continue;
 }
 
@@ -607,6 +615,9 @@ void BuildTrailSettings(int client)
     Format(CurrWidth, 24, "Current Width: %i", RoundFloat(EqpdTrail[client].Width));
     TrailSettings.DrawText(CurrWidth);
     TrailSettings.DrawItem("Change your trail width!");
+    TrailSettings.DrawText(" ");
+    (EqpdTrail[client].Showing) ? TrailSettings.DrawText("Currently: Displaying Trail") : TrailSettings.DrawText("Currently: Hiding Trail");
+    TrailSettings.DrawItem("Toggle Trail");
     TrailSettings.DrawText(" ");
     TrailSettings.DrawItem("Main Menu");
     TrailSettings.DrawItem("Exit");
@@ -1108,9 +1119,16 @@ public int TrailSettingsPage_Handler(Menu menu, MenuAction action, int param1, i
                 case 3:
                 {
                     EmitSoundToClient(param1, "buttons/button14.wav");
-                    SendPage1(param1);
+                    (EqpdTrail[param1].Showing) ? KillTrail(param1) : CreateTrail(param1);
+                    (EqpdTrail[param1].Showing) ? SetCookies(param1, 0, "false") : SetCookies(param1, 0, "true");
+                    BuildPluginSettings(param1);
                 }
                 case 4:
+                {
+                    EmitSoundToClient(param1, "buttons/button14.wav");
+                    SendPage1(param1);
+                }
+                case 5:
                 {
                     EmitSoundToClient(param1, "buttons/combine_button7.wav");
                     delete menu;
@@ -1136,7 +1154,8 @@ public int PluginSettingsPage_Handler(Menu menu, MenuAction action, int param1, 
                     BuildPluginSettings(param1);
 
                     (EqpdTrail[param1].Showing) ? SetCookies(param1, 0, "true") : SetCookies(param1, 0, "false");
-                    (EqpdTrail[param1].Showing) ? AcceptEntityInput(EqpdTrail[param1].EntityIndex, "ShowSprite") : AcceptEntityInput(EqpdTrail[param1].EntityIndex, "HideSprite");
+                    if (EqpdTrail[param1].EntityIndex != -1)
+                        (EqpdTrail[param1].Showing) ? AcceptEntityInput(EqpdTrail[param1].EntityIndex, "ShowSprite") : AcceptEntityInput(EqpdTrail[param1].EntityIndex, "HideSprite");
                 }
                 case 2:
                 {
@@ -1176,7 +1195,8 @@ public int EquipMenu_Handler(Menu menu, MenuAction action, int param1, int param
                 EqpdTrail[param1].TrailIndex = -1;
                 EqpdTrail[param1].Frame = 0;
 
-                AcceptEntityInput(EqpdTrail[param1].EntityIndex, "HideSprite");
+                if (EqpdTrail[param1].EntityIndex != -1)
+                    KillTrail(EqpdTrail[param1].TrailIndex);
 
                 CPrintToChat(param1, "%s Sucessfully unequipped {greenyellow}%s {default}from your trail slot!", Prefix, TrailName);
                 return 0;
@@ -1307,6 +1327,7 @@ public Action USR_OpenTrailMenu(int client, int args)
 
             EqpdTrail[client].StrToColor4(Arg2);
             UpdateTrail(client);
+            SetClientCookie(client, ck_TrailColor, Arg2);
         }
         else
         {
