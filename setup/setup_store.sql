@@ -197,7 +197,7 @@ END$$
 
 CREATE TRIGGER storeGiveServerSoundItems AFTER INSERT ON storeplayeritems FOR EACH ROW
 BEGIN
-    IF (NEW.ItemId = "srv_ssnd") THEN
+    IF (NEW.ItemId <> "srv_ssnd") THEN
             INSERT INTO storeplayeritems VALUES (NEW.SteamId, "snd_srv_sting", 0), (NEW.SteamId, 'snd_srv_login', 0), (NEW.SteamId, 'snd_mspam_warn1', 0), (NEW.SteamId, 'snd_mspam_warn2', 0);
     END IF;
 END$$

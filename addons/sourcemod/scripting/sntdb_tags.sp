@@ -158,7 +158,7 @@ public void OnClientPutInServer(int client)
 
 public void OnClientDisconnect(int client)
 {
-    if (IsValidClient(client))
+    if (SNT_IsValidClient(client))
         PlayerTags[client].Reset();
 }
 

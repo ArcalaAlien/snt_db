@@ -380,9 +380,13 @@ enum struct SNT_ClientInfo
  * @param   usingstore              0 - false, 1 - true. Used if the module needs to use the store schema too.
  * @param   store_schema            Optional buffer for the store schema
  * @param   storelen                size of store schema buffer
+ * @param   currency_name           optional buffer for currency name
+ * @param   currencylen             size of currency name buffer
+ * @param   currency_color          optional buffer for currency color
+ * @param   colorlen                size of currency color buffer.
  * @return                          Returns 1 on success, 0 on fail.
  */
-native bool LoadSQLConfigs(const char[] dbconfig_name, int maxlength, const char[] prefix, int prefixlen, const char[] schema, int schemalen, const char[] calledby, int usingstore=0, const char[] store_schema={' '}, int storelen=0);
+native bool LoadSQLConfigs(const char[] dbconfig_name, int maxlength, const char[] prefix, int prefixlen, const char[] schema, int schemalen, const char[] calledby, int usingstore=0, const char[] store_schema={' '}, int storelen=0, const char[] currency_name={' '}, int currencylen=0, const char[] currency_color={' '}, int colorlen=0);
 
 /**
  * Loads the configs for the map module from configs/sntdb/main_config.cfg
@@ -426,4 +430,4 @@ native bool CheckForWeekend();
  * @param client    Client index to check
  * @return          true if IsClientConnected, IsClientInGame return true and IsFakeClient returns false, otherwise false.
  */
-native bool IsValidClient(int client);
+native bool SNT_IsValidClient(int client);

@@ -347,6 +347,7 @@ public void OnPluginStart()
         PrintToServer("[SNT] ERROR IN STORE PLUGIN START: %s", error);
     }
 
+    HookEvent("player_team", OnPlayerChangeTeams);
     HookEvent("player_death", OnPlayerDeath);
 
     ck_Slot1Id = RegClientCookie("slot1_id", "SOUND SLOT 1 ID", CookieAccess_Protected);
@@ -397,10 +398,6 @@ public void OnClientPutInServer(int client)
     GetClientAuthId(client, AuthId_Steam3, SteamId, 64);
     GetClientName(client, PlayerName, 128);
 
-    char sQuery[512];
-    Format(sQuery, 512, "SELECT ItemId FROM %sInventories WHERE SteamId=\'%s\'", StoreSchema, SteamId);
-    SQL_TQuery(DB_sntdb, SQL_CheckForSoundItems, sQuery, client);
-
     Player[client].SetAuthId(SteamId);
     Player[client].SetPlayerName(PlayerName);
 
@@ -433,7 +430,7 @@ public void OnClientPutInServer(int client)
 
 public void OnClientDisconnect(int client)
 {
-    if (IsValidClient(client))
+    if (SNT_IsValidClient(client))
     {
         char DisconnectSound[256];
         PlayerSounds[client].GetSlotFile(4, DisconnectSound, 256);
@@ -475,6 +472,18 @@ public void OnPlayerDeath(Event event, const char[] name, bool dontBroadcast)
 
         EmitAmbientSound(DeathSoundFile, player_pos, client);
     }
+}
+
+public void OnPlayerChangeTeams(Event event, const char[] name, bool dontBroadcast)
+{
+    int client = GetClientOfUserId(GetEventInt(event, "userid"));
+
+    char SteamId[64];
+    GetClientAuthId(client, AuthId_Steam3, SteamId, 64);
+
+    char sQuery[512];
+    Format(sQuery, 512, "SELECT ItemId FROM %sInventories WHERE SteamId=\'%s\'", StoreSchema, SteamId);
+    SQL_TQuery(DB_sntdb, SQL_CheckForSoundItems, sQuery, client);
 }
 
 void BuildSoundPanel(int client)
@@ -992,6 +1001,13 @@ public int ServerSoundSlot_Handler(Menu menu, MenuAction action, int param1, int
     {
         case MenuAction_Select:
         {
+            char SteamId[64];
+            GetClientAuthId(param1, AuthId_Steam3, SteamId, 64);
+            
+            char sQuery2[512];
+            Format(sQuery2, 512, "SELECT ItemId FROM %sInventories WHERE SteamId=\'%s\'", StoreSchema, SteamId);
+            SQL_TQuery(DB_sntdb, SQL_CheckForSoundItems, sQuery2, param1);
+
             DataPack Info_Choice = CreateDataPack();
             Info_Choice.WriteCell(param1);
 
@@ -1048,8 +1064,6 @@ public int ServerSoundSlot_Handler(Menu menu, MenuAction action, int param1, int
                     return 0;
                 }
             }
-            char SteamId[64];
-            GetClientAuthId(param1, AuthId_Steam3, SteamId, 64);
 
             char sQuery[512];
             Format(sQuery, 512, "SELECT SteamId, ItemId, SoundName FROM %sInventories WHERE SUBSTR(ItemId, 1, 4)=\'snd_\' AND SteamId=\'%s\' ORDER BY SoundName ASC", StoreSchema, SteamId);
@@ -1108,6 +1122,10 @@ public int ECategoryPanel_Handler(Menu menu, MenuAction action, int param1, int 
         {
             char SteamId[64];
             GetClientAuthId(param1, AuthId_Steam3, SteamId, 64);
+
+            char sQuery2[512];
+            Format(sQuery2, 512, "SELECT ItemId FROM %sInventories WHERE SteamId=\'%s\'", StoreSchema, SteamId);
+            SQL_TQuery(DB_sntdb, SQL_CheckForSoundItems, sQuery2, param1);
 
             DataPack Info_Choice = CreateDataPack();
             Info_Choice.WriteCell(param1);
@@ -1701,6 +1719,13 @@ public Action USR_PlaySlot3(int client, int args)
 
 public Action USR_OpenSoundSettings(int client, int args)
 {
+    char SteamId[64];
+    GetClientAuthId(client, AuthId_Steam3, SteamId, 64);
+
+    char sQuery[512];
+    Format(sQuery, 512, "SELECT ItemId FROM %sInventories WHERE SteamId=\'%s\'", StoreSchema, SteamId);
+    SQL_TQuery(DB_sntdb, SQL_CheckForSoundItems, sQuery, client);
+
     BuildSoundPanel(client);
     return Plugin_Handled;
 }

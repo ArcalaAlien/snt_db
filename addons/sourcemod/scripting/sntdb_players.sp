@@ -294,6 +294,8 @@ enum struct KSSettings
 char DBConfName[64];
 char SchemaName[64];
 char StoreSchema[64]
+char CurrencyName[64];
+char CurrencyColor[64];
 char Prefix[96];
 PSettings PointCfg;
 KSSettings KSCfg;
@@ -312,7 +314,7 @@ ConVar BroadcastKillstreaks;
 
 public void OnPluginStart()
 {
-    LoadSQLConfigs(DBConfName, sizeof(DBConfName), Prefix, sizeof(Prefix), SchemaName, sizeof(SchemaName), "Ranks", 1, StoreSchema, sizeof(StoreSchema));
+    LoadSQLConfigs(DBConfName, sizeof(DBConfName), Prefix, sizeof(Prefix), SchemaName, sizeof(SchemaName), "Ranks", 1, StoreSchema, sizeof(StoreSchema), CurrencyName, sizeof(CurrencyName), CurrencyColor, sizeof(CurrencyColor));
     LoadRankSettings();
 
     char error[255];
@@ -408,7 +410,7 @@ public void OnClientPutInServer(int client)
 
 public void OnClientDisconnect(int client)
 {
-    if (IsValidClient(client))
+    if (SNT_IsValidClient(client))
         Player[client].Reset();
 }
 
@@ -764,8 +766,8 @@ void HandleKillstreak(int victim, int attacker)
         // Get the attacker and victim's names.
         char VName[257];
         char AName[257];
-        Player[victim].GetName(VName, sizeof(VName));
-        Player[attacker].GetName(AName, sizeof(AName));
+        GetClientName(victim, VName, 257);
+        GetClientName(attacker, AName, 257);
 
         // Get the attacker and victim's team colors for chat.
         char VTeamColor[64];
@@ -855,6 +857,7 @@ void HandleKillstreak(int victim, int attacker)
                 char msg2[256];
                 // Format msg: "[SNT] Attacker ended Victim's killstreak!"
                 Format(msg2, sizeof(msg2), "%s %s%s {default}made %s%s {default}walk the plank, ending thar killstreak!", Prefix, ATeamColor, AName, VTeamColor, VName);
+                KSMessage(victim, attacker, msg2);
 
                 // Add our points and multiply it by the KS bonus.
                 float PtsToAdd = (KillPts * 2.0) * (Multi);
@@ -868,7 +871,6 @@ void HandleKillstreak(int victim, int attacker)
                 Format(uQuery, sizeof(uQuery), "UPDATE %splayers SET Points=%f WHERE SteamId=\'%s\'", SchemaName, APts, ASteamId);
                 SQL_TQuery(DB_sntdb, SQL_ErrorHandler, uQuery);
 
-                KSMessage(victim, attacker, msg2);
             }
 
 
@@ -902,11 +904,6 @@ void HandleKillstreak(int victim, int attacker)
                     Format(msg, sizeof(msg), "%s %s%s {default}is %s%s!", Prefix, ATeamColor, AName, L4Color, L4Name);
                     Player[attacker].SetMultiplier(KSCfg.GetMultiplier(4));
             }
-            else if (Player[attacker].GetKS() > Level4Kills)
-            {
-                    Format(msg, sizeof(msg), "%s %s%s {default}is still %s%s!", Prefix, ATeamColor, AName, L4Color, L4Name);
-                    Player[attacker].SetMultiplier(KSCfg.GetMultiplier(4));
-            }
             // Broadcast the message
             KSMessage(victim, attacker, msg);
         }
@@ -919,10 +916,10 @@ void BuildPlayerList(int client)
     PlayerList.SetTitle("Choose a crewmate to view:");
     SetMenuExitBackButton(PlayerList, true);
 
-    for (int i = 1; i <= GetClientCount(); i++)
+    for (int i = 1; i <= MaxClients; i++)
     {
         {
-            if (!IsFakeClient(i))
+            if (SNT_IsValidClient(i))
             {
                 char SteamId[64];
                 char PlayerName[257];
@@ -1033,6 +1030,7 @@ public int PlacePanel_Handler(Menu menu, MenuAction action, int param1, int para
         {
             if (param2 == 1)
             {
+                EmitSoundToClient(param1, "buttons/button14.wav");
                 bool IsDisplayed = Player[param1].GetIfDisplayingRank();
                 Player[param1].SetDisplayingRank(!IsDisplayed);
                 if (IsDisplayed)
@@ -1052,6 +1050,7 @@ public int PlacePanel_Handler(Menu menu, MenuAction action, int param1, int para
             }
             else if (param2 == 2)
             {
+                EmitSoundToClient(param1, "buttons/button14.wav");
                 int disp_pos;
                 disp_pos = Player[param1].GetRankDispPos();
 
@@ -1082,6 +1081,7 @@ public int PlacePanel_Handler(Menu menu, MenuAction action, int param1, int para
         }
         case MenuAction_Cancel:
         {
+            EmitSoundToClient(param1, "buttons/combine_button7.wav");
             CloseHandle(menu);
         }
     }

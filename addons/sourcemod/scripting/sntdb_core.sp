@@ -10,18 +10,21 @@
 #include <morecolors>
 
 #define MSG01 "Have an issue with a player? Report them to an admin on our discord server!Use {greenyellow}discord.gg/xnuHA5KsEU{default} to join us and make a post in #public-staff-chat!"
-#define MSG02 "Are there no admins currently online? Use {greenyellow}/votemenu to start votes against problematic players!\n{fullred}ABUSE OF VOTEMENU WILL RESULT IN REVOCATION OF VOTEMENU PRIVILEGES."
+#define MSG02 "Are there no admins currently online? Use {greenyellow}/calladmin {default}to call an admin, or {greenyellow}/votemenu {default}to handle it yourself."
 #define MSG03 "Welcome to {greenyellow}Surf'n'Turf!{default}\nJoin our discord community at {greenyellow}discord.gg/xnuHA5KsEU{default}!"
 #define MSG04 "Want an easy way to set up your custom items? Do {greenyellow}/equip{default} to access all custom item menus easily!"
 #define MSG05 "Want a change of scenery? Use {greenyellow}/rtv {default}to vote to change the map!"
 #define MSG06 "We have a huge selection of maps! Check it out using {greenyellow}/nominate!"
 #define MSG07 "Bored? Type {greenyellow}rtd{default} in chat to get a random effect!"
 #define MSG08 "New to the server? Use {greenyellow}/info{default} to open the info menu!"
-#define MSG09 "Sail yerself to the {greenyellow}/tavern{default} ta check out their wares!"
+#define MSG09 "Ye want treasure? Sail yerself to the {greenyellow}/tavern{default} ta check out their wares!"
 #define MSG10 "Wanna check to see what ye've got in yer coffers? Do {greenyellow}/treasure{default} to find out!"
 #define MSG11 "Wanna know how to use those sounds you bought from the store?\nBind keys to {greenyellow}sm_playslot1, sm_playslot2, & sm_playslot3 {default}to use our in-server soundboard!"
 #define MSG12 "Give us your feedback! Use {greenyellow}/rate {default}to give a map a rating of 1-5 stars!"
-#define MSG13 "Don't like the speedometer? Use {greenyellow}/speedo{default} to toggle it on and off!"
+#define MSG13 "Missing out on a taunt? Do {greenyellow}/taunt {orange}<name> {default}to play the taunt on your character!"
+#define MSG14 "Need a better view? Type {greenyellow}/tp{default} in chat to go into third person mode!"
+#define MSG15 "Want to stop listening to someone's voicechat, but not miss out on what they're typing? Use {greenyellow}/ignore {orange}<playername>{default} to stop listening to a player!"
+
 
 public Plugin myinfo =
 {
@@ -40,7 +43,7 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
     CreateNative("GetServerTime", GetServerTime_Native);
     CreateNative("GetServerDay", GetServerDay_Native);
     CreateNative("CheckForWeekend", CheckWeekend_Native);
-    CreateNative("IsValidClient",   IsValidClient_Native);
+    CreateNative("SNT_IsValidClient",   IsValidClient_Native);
     RegPluginLibrary("sntdb_core");
 
     return APLRes_Success;
@@ -129,7 +132,7 @@ public void OnPluginStart()
     
     if (ConfigFile == null)
     {
-        PrintToServer("[SNT] ERROR! \"configs/sntdb/main_config.cfg\": file does not exist!");
+        ThrowError("[SNT] ERROR! \"configs/sntdb/main_config.cfg\": file does not exist!");
     }
 
     if (ConfigFile.JumpToKey("System"))
@@ -142,7 +145,7 @@ public void OnPluginStart()
     }
     else
     {
-        PrintToServer("[SNT] ERROR! COULD NOT LOAD CORE CONFIG");
+        ThrowError("[SNT] ERROR! COULD NOT LOAD CORE CONFIG");
     }  
 
     PrintToServer("[SNT] Connecting to Database");
@@ -150,7 +153,7 @@ public void OnPluginStart()
     DB_sntdb = SQL_Connect(DBConfName, true, error, sizeof(error));
     if (!StrEqual(error, ""))
     {
-        PrintToServer("[SNT] ERROR IN PLUGIN START: %s", error);
+        ThrowError("[SNT] ERROR IN PLUGIN START: %s", error);
     }
 
     HookEvent("player_team", OnPlayerTeam);
@@ -159,6 +162,8 @@ public void OnPluginStart()
     TimeBetweenMessages = CreateConVar("snt_msg_cooldown", "300", "The amount in seconds between each info message in chat.", 0, true, 180.0);
 
     RegConsoleCmd("sm_info", USR_OpenInfoMenu, "Usage: /info Opens the server info menu!");
+    RegConsoleCmd("sm_r", USR_Respawn, "Usage: /r to respawn!");
+    RegConsoleCmd("sm_respawn", USR_Respawn, "Usage: /respawn to respawn!");
     //RegAdminCmd("sm_snt_events",    ADM_OpenEventsMenu,      ADMFLAG_GENERIC,    "/snt_events: Use this to open the events menu.");
     //RegAdminCmd("sm_datetest",     ADM_TestPlugin,          ADMFLAG_GENERIC,    "test this bitch");
     //RegAdminCmd("sm_snt_groupmod",  ADM_ModGroup,           ADMFLAG_BAN,        "/snt_groupmod <gid> <user>: Toggle a user's group id. Type list with no user to list all groups");
@@ -193,7 +198,7 @@ public void OnClientDisconnect(int client)
 public Action CP_OnChatMessage(int& author, ArrayList recipients, char[] flagstring, char[] name, char[] message, bool & processcolors, bool & removecolors)
 {
     char DateSent[32];
-    FormatTime(DateSent, 32, "%A %D %R:%S", GetTime());
+    FormatTime(DateSent, 32, "%D %R:%S", GetTime() - (4*60*60));
 
     char SteamId[64];
     GetClientAuthId(author, AuthId_Steam3, SteamId, 64);
@@ -259,7 +264,7 @@ void GetServerTime(int zone, char[] current_time, int maxlen)
 
 void GetServerDay(char[] current_day, int maxlen)
 {
-    FormatTime(current_day, maxlen, "%A", GetTime());
+    FormatTime(current_day, maxlen, "%A", GetTime() - (4*60*60));
 }
 
 bool CheckWeekend()
@@ -311,7 +316,7 @@ public void GetServerTime_Native(Handle plugin, int params)
 
 public void GetServerDay_Native(Handle plugin, int params)
 {
-    int currentTime = GetTime();
+    int currentTime = GetTime() - (4*60*60);
     char currentDay[16];
     FormatTime(currentDay, 32, "%A", currentTime);
 
@@ -370,6 +375,8 @@ public any ReadSQLConfigs(Handle plugin, int numParams)
         char prefix[96];
         char schema[64];
         char store_schema[64];
+        char currency_name[64];
+        char currency_color[64];
         
         // Gather values from config file and store it in the variables.
         ConfigFile.GetString("dbconfig", dbconfig_name, sizeof(dbconfig_name));
@@ -377,7 +384,19 @@ public any ReadSQLConfigs(Handle plugin, int numParams)
         ConfigFile.GetString("schema", schema, sizeof(schema));
         if (GetNativeCell(8) == 1)
         {
-            ConfigFile.GetString("store_schema", store_schema, sizeof(store_schema));
+            ConfigFile.Rewind();
+            if (!ConfigFile.JumpToKey("Store"))
+            {
+                PrintToServer("[SNT] ERROR! Missing \"Store\" section from config file.");
+                delete ConfigFile;
+                return false;
+            }
+            else
+            {
+                ConfigFile.GetString("schema", store_schema, sizeof(store_schema));
+                ConfigFile.GetString("currency_name", currency_name, sizeof(currency_name));
+                ConfigFile.GetString("currency_color", currency_color, sizeof(currency_color));
+            }
         }
 
 
@@ -387,7 +406,7 @@ public any ReadSQLConfigs(Handle plugin, int numParams)
         PrintToServer("[SNT] dbconfig: %s", dbconfig_name);
         PrintToServer("[SNT] schema: %s", schema);
 
-        if (GetNativeCell(9) == 1)
+        if (GetNativeCell(8) == 1)
         {
             PrintToServer("[SNT] store_schema: %s", store_schema);
         }
@@ -404,6 +423,8 @@ public any ReadSQLConfigs(Handle plugin, int numParams)
         if (GetNativeCell(8) == 1)
         {
             SetNativeString(9, store_schema, GetNativeCell(10));
+            SetNativeString(11, currency_name, GetNativeCell(12));
+            SetNativeString(13, currency_name, GetNativeCell(14));
         }
     }
     return true;
@@ -761,17 +782,17 @@ public void SQL_ErrorHandler(Database db, DBResultSet results, const char[] erro
 
 public Action Timer_WelcomeMessage(Handle timer, any data)
 {
-    // char timeEST[16];
-    // char timePST[16];
-    // char timeCET[16];
+    char timeEST[16];
+    char timePST[16];
+    char timeCET[16];
     char currentDay[16];
     char currentDate[16];
 
-    FormatTime(currentDate, 16, "%m/%d", GetTime());
+    FormatTime(currentDate, 16, "%m/%d", GetTime() - (4*60*60));
     GetServerDay(currentDay, 16);
-    // GetServerTime(0, timeEST, 16);
-    // GetServerTime(1, timePST, 16);
-    // GetServerTime(2, timeCET, 16);
+    GetServerTime(0, timeEST, 16);
+    GetServerTime(1, timePST, 16);
+    GetServerTime(2, timeCET, 16);
 
     if (PlayerJoined[data] != 1 && ValidateClient(data))
     {
@@ -780,7 +801,7 @@ public Action Timer_WelcomeMessage(Handle timer, any data)
         EmitSoundToClient(data, "snt_sounds/ypp_login.mp3");
         CPrintToChat(data, "{yellowgreen}Ahoy! Welcome ye to the crew, {default}%s!", PlayerName);
         CPrintToChat(data, "%s The date is: {orange}%s %s", Prefix, currentDay, currentDate);
-        //CPrintToChat(data, "%s EST: {orange}%s{default} PST: {orange}%s{default} CET: {orange}%s{default}", Prefix, timeEST, timePST, timeCET);
+        CPrintToChat(data, "%s EST: {orange}%s{default} PST: {orange}%s{default} CET: {orange}%s{default}", Prefix, timeEST, timePST, timeCET);
         //CPrintToChat(data, "The current time is {rblxlightblue}%i:%s %s CEST\n{yellowgreen}%i:%s %s EST, {orange}%i:%s %s PST", CESTHour, CurrentMinute, CESTAMPM, ESTHour, CurrentMinute, ESTAMPM, PSTHour, CurrentMinute, PSTAMPM);
         PlayerJoined[data] = 1;
     }
@@ -789,37 +810,56 @@ public Action Timer_WelcomeMessage(Handle timer, any data)
 
 public Action Timer_DisplayInfo(Handle timer, any data)
 {
-    int MsgToDisplay = GetRandomInt(1, 13);
+    int MsgList = GetRandomInt(1, 2);
+
 
     char HintMessage[256];
-    switch (MsgToDisplay)
+    switch (MsgList)
     {
         case 1:
-            Format(HintMessage, 256, "%s %s", Prefix, MSG01);
+        {
+            int MsgToDisplay = GetRandomInt(1, 8);
+            switch (MsgToDisplay)
+            {
+                case 1:
+                    Format(HintMessage, 256, "%s %s", Prefix, MSG01);
+                case 2:
+                    Format(HintMessage, 256, "%s %s", Prefix, MSG02);
+                case 3:
+                    Format(HintMessage, 256, "%s %s", Prefix, MSG03);
+                case 4:
+                    Format(HintMessage, 256, "%s %s", Prefix, MSG04);
+                case 5:
+                    Format(HintMessage, 256, "%s %s", Prefix, MSG05);
+                case 6:
+                    Format(HintMessage, 256, "%s %s", Prefix, MSG06);
+                case 7:
+                    Format(HintMessage, 256, "%s %s", Prefix, MSG07);
+                case 8:
+                    Format(HintMessage, 256, "%s %s", Prefix, MSG08);
+            }
+        }
         case 2:
-            Format(HintMessage, 256, "%s %s", Prefix, MSG02);
-        case 3:
-            Format(HintMessage, 256, "%s %s", Prefix, MSG03);
-        case 4:
-            Format(HintMessage, 256, "%s %s", Prefix, MSG04);
-        case 5:
-            Format(HintMessage, 256, "%s %s", Prefix, MSG05);
-        case 6:
-            Format(HintMessage, 256, "%s %s", Prefix, MSG06);
-        case 7:
-            Format(HintMessage, 256, "%s %s", Prefix, MSG07);
-        case 8:
-            Format(HintMessage, 256, "%s %s", Prefix, MSG08);
-        case 9:
-            Format(HintMessage, 256, "%s %s", Prefix, MSG09);
-        case 10:
-            Format(HintMessage, 256, "%s %s", Prefix, MSG10);
-        case 11: 
-            Format(HintMessage, 256, "%s %s", Prefix, MSG11);
-        case 12:
-            Format(HintMessage, 256, "%s %s", Prefix, MSG12);
-        case 13:
-            Format(HintMessage, 256, "%s %s", Prefix, MSG13);
+        {
+            int MsgToDisplay = GetRandomInt(1, 7);
+            switch (MsgToDisplay)
+            {
+                case 1:
+                    Format(HintMessage, 256, "%s %s", Prefix, MSG09);
+                case 2:
+                    Format(HintMessage, 256, "%s %s", Prefix, MSG10);
+                case 3:
+                    Format(HintMessage, 256, "%s %s", Prefix, MSG11);
+                case 4:
+                    Format(HintMessage, 256, "%s %s", Prefix, MSG12);
+                case 5:
+                    Format(HintMessage, 256, "%s %s", Prefix, MSG13);
+                case 6:
+                    Format(HintMessage, 256, "%s %s", Prefix, MSG14);
+                case 7:
+                    Format(HintMessage, 256, "%s %s", Prefix, MSG15);
+            }
+        }
     }
 
     CPrintToChatAll(HintMessage);
@@ -875,5 +915,16 @@ public Action USR_OpenInfoMenu (int client, int args)
 
     if (ValidateClient(client))
         BuildInfo_Page1(client)
+    return Plugin_Handled;
+}
+
+public Action USR_Respawn (int client, int args)
+{
+    if (client == 0)
+        return Plugin_Handled;
+
+    if (ValidateClient(client))
+        TF2_RespawnPlayer(client);
+
     return Plugin_Handled;
 }

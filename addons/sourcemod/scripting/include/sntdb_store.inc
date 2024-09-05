@@ -46,3 +46,13 @@ native void GetClientNameColor(int client, char[] colorBuffer, int maxlen);
  * @param maxlen        length of char buffer
  */
 native void GetClientChatColor(int client, char[] colorBuffer, int maxlen);
+
+/**
+ *  Add credits to a client
+ * 
+ *  @param client       Client index
+ *  @param amount       Amount to add
+ * 
+ *  @noreturn
+ */
+native void SNT_AddCredits(int client, int amount);

@@ -177,6 +177,7 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
     CreateNative("OpenInventoryMenu", BuildPage1Inventory_Native);
     CreateNative("GetClientNameColor",  SendClientNameColor_Native);
     CreateNative("GetClientChatColor", SendClientChatColor_Native);
+    CreateNative("SNT_AddCredits", AddCredits_Native);
     RegPluginLibrary("sntdb_store");
 
     return APLRes_Success;
@@ -289,7 +290,7 @@ public void OnClientPostAdminCheck(int client)
 
 public void OnClientDisconnect(int client)
 {
-    if (IsValidClient(client))
+    if (SNT_IsValidClient(client))
     {
         TempChoice[client].Reset();
         Player[client].Reset();
@@ -569,6 +570,28 @@ public void SendClientChatColor_Native(Handle plugin, int numParams)
     SetNativeString(2, chatColor, GetNativeCell(3));
 }
 
+public void AddCredits_Native(Handle plugin, int numParams)
+{
+    int client = GetNativeCell(1);
+    char sSteamId[64];
+    if (GetClientAuthId(client, AuthId_Steam3, sSteamId, sizeof(sSteamId)))
+    {
+        char sQuery[512];
+        int iCurCredits = Player[client].GetCredits();
+        int iPayout = GetNativeCell(2);
+
+        iCurCredits = (iCurCredits + iPayout);
+        Player[client].SetCredits(iCurCredits);
+        Format(sQuery, sizeof(sQuery), "UPDATE %splayers "
+                                    ..."SET Credits=\"%i\" "
+                                    ..."WHERE SteamId=\"%s\";", StoreSchema, iCurCredits, sSteamId);
+        
+        SQL_TQuery(DB_sntdb, SQL_ErrorHandler, sQuery);
+    }
+    else
+        LogError("** AddCredits_Native ** Could not get client AuthId");
+}
+
 // void BuildTop10sPage(int client)
 // {
 //     Menu Top10Cats = new Menu(Top10Categories_Handler, MENU_ACTIONS_DEFAULT);
@@ -780,7 +803,7 @@ public int InvItems_Handler(Menu menu, MenuAction action, int param1, int param2
                 }
                 case 3:
                 {
-                    Format(sQuery, 512, "SELECT ItemId, TrailName, ModelIndex FROM %sInventories WHERE SteamId=\'%s\' AND LEFT(ItemId, 4)=\'trl_\'", StoreSchema, SteamId);
+                    Format(sQuery, 512, "SELECT ItemId, TrailName FROM %sInventories WHERE SteamId=\'%s\' AND LEFT(ItemId, 4)=\'trl_\'", StoreSchema, SteamId);
                     TempChoice[param1].SetItemId(ChosenOption);
                     TempChoice[param1].SetItemType(3);
                 }

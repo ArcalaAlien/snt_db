@@ -111,15 +111,13 @@ public int MapCategoriesHandler(Menu menu, MenuAction action, int param1, int pa
             
             if (StrEqual(MenuCategory, "evnt_none"))
             {
-                Menu_RegularMaps.Display(param1, MENU_TIME_FOREVER);
+                Menu_RegularMaps.Display(param1, 20);
             }
             else if (StrEqual(MenuCategory, "evnt_weed"))
             {
-                //Menu_WeedMaps.Display(param1, MENU_TIME_FOREVER);
+                //Menu_WeedMaps.Display(param1, 20);
             }
         }
-        case MenuAction_End:
-            delete menu;
     }
 
     return 0;
@@ -154,8 +152,6 @@ public int MapsRatingHandler(Menu menu, MenuAction action, int param1, int param
             Format(vQuery, sizeof(vQuery), "SELECT LastVote FROM %splayermaps WHERE SteamId=\'%s\' AND MapName=\'%s\'", SchemaName, SteamId, SelectedMapEsc);
             SQL_TQuery(DB_sntdb, SQL_GetLastRatingForMenu, vQuery, MapInfo_Pack);
         }
-        case MenuAction_End:
-            return 0;
     }
 
     return 0;
@@ -227,11 +223,9 @@ public int RatingMenuHandler(Menu menu, MenuAction action, int param1, int param
             }
             else
             {
-                delete menu;
+                return 0;
             }
         }
-        case MenuAction_End:
-            return 0;
     }
     return 0;
 }
@@ -305,7 +299,7 @@ public int ReportMenuHandler(Menu menu, MenuAction action, int param1, int param
                 MapInfoCategory.SetTitle("Choose a category!");
                 MapInfoCategory.AddItem("evnt_none", "Non-Event Maps");
                 //MapInfoCategory.AddItem("evnt_weed", "420 Event Maps");
-                MapInfoCategory.Display(param1, MENU_TIME_FOREVER);
+                MapInfoCategory.Display(param1, 20);
             }
             else if (StrEqual(MenuChoice, "TOP10"))
             {
@@ -324,9 +318,6 @@ public int ReportMenuHandler(Menu menu, MenuAction action, int param1, int param
                 SQL_TQuery(DB_sntdb, SQL_Build10MapList, sQuery, Client_Pack);
             }
         }
-
-        case MenuAction_End:
-            delete menu;
     }
 
     return 0;
@@ -379,8 +370,6 @@ public int MapInfoCategoryHandler(Menu menu, MenuAction action, int param1, int 
                 SQL_TQuery(DB_sntdb, SQL_BuildMapMenu, sQuery, Client_Pack);
             }
         }
-        case MenuAction_End:
-            delete menu;
     }
     return 0;
 }
@@ -409,8 +398,6 @@ public int MapInfoHandler(Menu menu, MenuAction action, int param1, int param2)
             Format(sQuery, sizeof(sQuery), "SELECT * FROM %sMapRatings WHERE MapName=\'%s\'", SchemaName, MapChoiceEsc);
             SQL_TQuery(DB_sntdb, SQL_GetMapInfo, sQuery, Map_Info);
         }
-        case MenuAction_End:
-            return 0;
     }
     return 0;
 }
@@ -521,7 +508,7 @@ public void SQL_BuildMapMenu(Database db, DBResultSet results, const char[] erro
     //PrintToServer("[SNT] Total rows in results: %i", TotalRows);
 
     if (client != 0)
-        MapList.Display(client, MENU_TIME_FOREVER);
+        MapList.Display(client, 20);
     else
         PrintToServer("[SNT] Built maplist.");
 }
@@ -590,7 +577,7 @@ public void SQL_GetLastRatingForMenu(Database db, DBResultSet results, const cha
     RateMapMenu.AddItem(Rate3, "3 Stars");
     RateMapMenu.AddItem(Rate4, "4 Stars");
     RateMapMenu.AddItem(Rate5, "5 Stars");
-    RateMapMenu.Display(client, MENU_TIME_FOREVER);
+    RateMapMenu.Display(client, 20);
 }
 
 public void SQL_Build10MapList(Database db, DBResultSet results, const char[] error, any data)
@@ -638,7 +625,7 @@ public void SQL_Build10MapList(Database db, DBResultSet results, const char[] er
         }
     }
 
-    List10Menu.Display(client, MENU_TIME_FOREVER);
+    List10Menu.Display(client, 20);
     CloseHandle(data);
 }
 
@@ -696,7 +683,7 @@ public void SQL_GetMapInfo(Database db, DBResultSet results, const char[] error,
         MapInfoMenu.AddItem("Votes", FTotalVotes, ITEMDRAW_DISABLED);
         MapInfoMenu.AddItem("", "", ITEMDRAW_SPACER);
         MapInfoMenu.AddItem(MapName, "Vote for this map!");
-        MapInfoMenu.Display(client, MENU_TIME_FOREVER);
+        MapInfoMenu.Display(client, 20);
     }
     else
     {
@@ -707,7 +694,7 @@ public void SQL_GetMapInfo(Database db, DBResultSet results, const char[] error,
         MapInfoMenu.AddItem("", "", ITEMDRAW_SPACER);
         MapInfoMenu.AddItem(MapName, "Yes");
         MapInfoMenu.AddItem("N", "No");
-        MapInfoMenu.Display(client, MENU_TIME_FOREVER);
+        MapInfoMenu.Display(client, 20);
     }
     CloseHandle(data);
 }
@@ -887,7 +874,7 @@ public Action USR_OpenRatingMenu(int client, int args)
     MapReportMenu.AddItem("BOT10", "Bottom 10 Maps!");
     MapReportMenu.AddItem("SEEMAPINFO", "See this map's rating!")
     MapReportMenu.AddItem("OTHERMAPINFO", "See other map's ratings!");
-    MapReportMenu.Display(client, MENU_TIME_FOREVER);
+    MapReportMenu.Display(client, 20);
     return Plugin_Handled;
 }
 
