@@ -195,6 +195,15 @@ public void OnClientDisconnect(int client)
         PlayerJoined[client] = 0;
 }
 
+public void OnClientConnected(int client)
+{
+    int timeLeft;
+    GetMapTimeLeft(timeLeft);
+
+    if (timeLeft < -1)
+        ExtendMapTimeLimit((60 * 30));
+}
+
 public Action CP_OnChatMessage(int& author, ArrayList recipients, char[] flagstring, char[] name, char[] message, bool & processcolors, bool & removecolors)
 {
     char DateSent[32];
@@ -721,15 +730,17 @@ public int InfoPage1_Handler(Menu menu, MenuAction action, int param1, int param
                     Panel StaffList_Panel = CreatePanel();
                     StaffList_Panel.SetTitle("Surf'n'Turf Staff Members");
                     StaffList_Panel.DrawText(" ");
-                    StaffList_Panel.DrawText("Owners / Admins");
+                    StaffList_Panel.DrawText("Owners");
                     StaffList_Panel.DrawItem("LucasDoofus");
                     StaffList_Panel.DrawItem("Webmaster Matt");
                     StaffList_Panel.DrawItem("Arcala the Gyiyg");
-                    StaffList_Panel.DrawText("");
-                    StaffList_Panel.DrawText("Moderators");
-                    StaffList_Panel.DrawItem("Weeabruh");
+                    StaffList_Panel.DrawText(" ");
+                    StaffList_Panel.DrawText("Admins");
                     StaffList_Panel.DrawItem("twerp");
-                    StaffList_Panel.DrawText("");
+                    StaffList_Panel.DrawText(" ");
+                    StaffList_Panel.DrawText("Moderators");
+                    StaffList_Panel.DrawItem("Omega");
+                    StaffList_Panel.DrawText(" ");
                     StaffList_Panel.DrawItem("Info Menu");
                     StaffList_Panel.DrawItem("Exit");
                     StaffList_Panel.Send(param1, StaffPanel_Handler, 0);
@@ -802,6 +813,7 @@ public Action Timer_WelcomeMessage(Handle timer, any data)
         CPrintToChat(data, "{yellowgreen}Ahoy! Welcome ye to the crew, {default}%s!", PlayerName);
         CPrintToChat(data, "%s The date is: {orange}%s %s", Prefix, currentDay, currentDate);
         CPrintToChat(data, "%s EST: {orange}%s{default} PST: {orange}%s{default} CET: {orange}%s{default}", Prefix, timeEST, timePST, timeCET);
+        CPrintToChat(data, "%s We have a huge variety of maps! Don't forget to use {greenyellow}/nominate{default} to check them out!", Prefix);
         //CPrintToChat(data, "The current time is {rblxlightblue}%i:%s %s CEST\n{yellowgreen}%i:%s %s EST, {orange}%i:%s %s PST", CESTHour, CurrentMinute, CESTAMPM, ESTHour, CurrentMinute, ESTAMPM, PSTHour, CurrentMinute, PSTAMPM);
         PlayerJoined[data] = 1;
     }

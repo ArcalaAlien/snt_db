@@ -12,7 +12,6 @@
 #define ICON_ON  "materials/icons/snt_mspam_on.vmt"
 #define ICON_OFF "materials/icons/snt_mspam_off.vmt"
 
-
 public Plugin myinfo =
 {
     name = "SNT Micspam Module",
