@@ -35,20 +35,6 @@ public Plugin myinfo =
     url = "https://github.com/ArcalaAlien/snt_db"
 };
 
-public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
-{
-
-    CreateNative("LoadSQLConfigs", ReadSQLConfigs);
-    CreateNative("LoadSQLStoreConfigs", ReadSQLStoreConfigs);
-    CreateNative("GetServerTime", GetServerTime_Native);
-    CreateNative("GetServerDay", GetServerDay_Native);
-    CreateNative("CheckForWeekend", CheckWeekend_Native);
-    CreateNative("SNT_IsValidClient",   IsValidClient_Native);
-    RegPluginLibrary("sntdb_core");
-
-    return APLRes_Success;
-}
-
 /*
 TODO:
     Player enter / leave messages.
@@ -118,9 +104,27 @@ int  TimeLeft;
 int PlayerJoined[MAXPLAYERS+1];
 Handle InfoTimer = INVALID_HANDLE;
 
+bool lateLoad;
+
 // Convars
 ConVar TimeBetweenMessages;
 ConVar EventCooldown;
+
+public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
+{
+
+    CreateNative("LoadSQLConfigs", ReadSQLConfigs);
+    CreateNative("LoadSQLStoreConfigs", ReadSQLStoreConfigs);
+    CreateNative("GetServerTime", GetServerTime_Native);
+    CreateNative("GetServerDay", GetServerDay_Native);
+    CreateNative("CheckForWeekend", CheckWeekend_Native);
+    CreateNative("SNT_IsValidClient",   IsValidClient_Native);
+    RegPluginLibrary("sntdb_core");
+
+    lateLoad = late;
+
+    return APLRes_Success;
+}
 
 public void OnPluginStart()
 {
@@ -167,6 +171,9 @@ public void OnPluginStart()
     //RegAdminCmd("sm_snt_events",    ADM_OpenEventsMenu,      ADMFLAG_GENERIC,    "/snt_events: Use this to open the events menu.");
     //RegAdminCmd("sm_datetest",     ADM_TestPlugin,          ADMFLAG_GENERIC,    "test this bitch");
     //RegAdminCmd("sm_snt_groupmod",  ADM_ModGroup,           ADMFLAG_BAN,        "/snt_groupmod <gid> <user>: Toggle a user's group id. Type list with no user to list all groups");
+
+    if (lateLoad)
+        OnMapStart();
 }
 
 public void OnMapStart()

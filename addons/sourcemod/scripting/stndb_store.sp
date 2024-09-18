@@ -169,6 +169,7 @@ enum struct ItemChoice
     }
 }
 
+bool lateLoad;
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
 {
@@ -179,6 +180,8 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
     CreateNative("GetClientChatColor", SendClientChatColor_Native);
     CreateNative("SNT_AddCredits", AddCredits_Native);
     RegPluginLibrary("sntdb_store");
+
+    lateLoad = late;
 
     return APLRes_Success;
 }
@@ -244,10 +247,27 @@ public void OnPluginStart()
     RegConsoleCmd("sm_color", USR_OpenColorMenu, "Use this to preview all of the different colors we have!");
     RegConsoleCmd("sm_colors", USR_OpenColorMenu, "Use this to preview all of the different colors we have!");
     RegConsoleCmd("sm_equip", USR_OpenEquipCatMenu, "Use this to quickly access all equip menus!");
+    RegConsoleCmd("sm_credits", USR_DisplayCredits, "Use this to show how many credits you have!");
+
+    char creditCMD[32];
+    Format(creditCMD, sizeof(creditCMD), "sm_%s", CurrencyName);
+    RegConsoleCmd(creditCMD, USR_DisplayCredits, "Use this to show how many credits you have!");
+
     // admin commands
     RegAdminCmd("sm_reloadstore_cfg", ADM_ReloadCfgs, ADMFLAG_ROOT, "/reloadstore_cfg Use this to reload the main config for the store");
     RegAdminCmd("sm_addcredits", ADM_AddCredits, ADMFLAG_UNBAN, "/addcredits <player> <amount> Use this to give credits to a player.");
     RegAdminCmd("sm_rmvcredits", ADM_RmvCredits, ADMFLAG_UNBAN, "/rmvcredits <player> <amount> Use this to take away credits from a player.");
+
+    if (lateLoad)
+    {
+        for (int i = 1; i < MaxClients; i++)
+        {
+            if (SNT_IsValidClient(i))
+                OnClientPostAdminCheck(i);
+
+            OnMapStart();
+        }
+    }
 }
 
 public void OnClientPostAdminCheck(int client)
@@ -1998,6 +2018,15 @@ public void SQL_FillInvMenu(Database db, DBResultSet results, const char[] error
     InvMenu.Display(client, MENU_TIME_FOREVER);
 }
 
+public Action USR_DisplayCredits(int client, int args)
+{
+    if (client == 0)
+        return Plugin_Handled;
+
+    int credits = Player[client].GetCredits();
+    CPrintToChat(client, "%s Ye've got [%s%i %s{default}] in yer coffers!", Prefix, CurrencyColor, credits, CurrencyName);
+    return Plugin_Handled;
+}
 
 public Action USR_OpenStore(int client, int args)
 {

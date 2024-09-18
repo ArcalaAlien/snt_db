@@ -23,6 +23,8 @@ public Plugin myinfo =
     url = "https://github.com/ArcalaAlien/snt_db"
 }
 
+bool lateLoad;
+
 Database DB_sntdb;
 char DBConfName[64];
 char SchemaName[64];
@@ -68,6 +70,12 @@ Handle ScrambleVoteTimer = INVALID_HANDLE;
 Handle SPVoteTimer = INVALID_HANDLE;
 Handle CountdownTimer = INVALID_HANDLE;
 
+public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
+{
+    lateLoad = late;
+    return APLRes_Success;
+}
+
 public void OnPluginStart()
 {
     LoadSQLConfigs(DBConfName, 64, Prefix, 96, SchemaName, 64, "VoteMenu");
@@ -99,6 +107,15 @@ public void OnPluginStart()
     RegConsoleCmd("sm_votemenu", USR_OpenVoteMenu, "Use /votemenu to open the votemenu.");
 
     RegAdminCmd("sm_voteperms", ADM_ModVotePerms, ADMFLAG_GENERIC, "Use /voteperms [add | rmv] (opt: Steam3ID) to give / remove a player's votemenu permissions");
+
+    if (lateLoad)
+    {
+        OnMapStart();
+        for (int i = 1; i < MaxClients; i++)
+            if (SNT_IsValidClient(i))
+                OnClientPostAdminCheck(i);
+    }
+
 }
 
 public void OnClientPostAdminCheck(int client)

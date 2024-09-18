@@ -312,6 +312,14 @@ Database DB_sntdb;
 // Setup Convars
 ConVar BroadcastKillstreaks;
 
+bool lateLoad;
+
+public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
+{
+    lateLoad = late;
+    return APLRes_Success;
+}
+
 public void OnPluginStart()
 {
     LoadSQLConfigs(DBConfName, sizeof(DBConfName), Prefix, sizeof(Prefix), SchemaName, sizeof(SchemaName), "Ranks", 1, StoreSchema, sizeof(StoreSchema), CurrencyName, sizeof(CurrencyName), CurrencyColor, sizeof(CurrencyColor));
@@ -338,6 +346,11 @@ public void OnPluginStart()
     RegConsoleCmd("sm_ranks", USR_OpenRankMenu);
 
     RegConsoleCmd("sm_rank", USR_OpenRankMenu);
+
+    if (lateLoad)
+        for (int i = 1; i < MaxClients; i++)
+            if (SNT_IsValidClient(i))
+                OnClientPutInServer(i);
 }
 
 // Forwards //

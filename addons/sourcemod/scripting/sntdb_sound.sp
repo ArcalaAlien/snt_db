@@ -279,15 +279,7 @@ enum struct SoundSlots
     }
 }
 
-public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
-{
-
-    CreateNative("OpenSoundMenu", BuildSoundPanel_Native);
-    CreateNative("OpenSoundEquip", SendEquipMenu_Native);
-    RegPluginLibrary("sntdb_sound");
-
-    return APLRes_Success;
-}
+bool lateLoad;
 
 SNT_ClientInfo Player[MAXPLAYERS + 1];
 SoundSlots PlayerSounds[MAXPLAYERS + 1];
@@ -334,6 +326,17 @@ Cookie ck_DeathSoundName;
 Cookie ck_DeathSoundFile;
 
 Cookie ck_ConnectionSoundsEnabled;
+
+public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
+{
+
+    CreateNative("OpenSoundMenu", BuildSoundPanel_Native);
+    CreateNative("OpenSoundEquip", SendEquipMenu_Native);
+    RegPluginLibrary("sntdb_sound");
+
+    lateLoad = late;
+    return APLRes_Success;
+}
 
 public void OnPluginStart()
 {
@@ -385,6 +388,11 @@ public void OnPluginStart()
     RegConsoleCmd("sm_playslot2", USR_PlaySlot2, "Usage: Bind this to a key to play a sound!");
     RegConsoleCmd("sm_playslot3", USR_PlaySlot3, "Usage: Bind this to a key to play a sound!");
     RegAdminCmd("sm_give_csnd", ADM_GiveItem, ADMFLAG_ROOT, "Give all players in the server connection sounds.");
+
+    if (lateLoad)
+        for (int i = 1; i < MaxClients; i++)
+            if (SNT_IsValidClient(i))
+                OnClientPutInServer(i);
 }
 
 public void OnClientPutInServer(int client)

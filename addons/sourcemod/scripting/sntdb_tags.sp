@@ -99,6 +99,8 @@ public Plugin myinfo =
     url = "https://github.com/ArcalaAlien/snt_db"
 };
 
+bool lateLoad;
+
 Database DB_sntdb;
 char DBConfName[64];
 char Prefix[96];
@@ -124,6 +126,7 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
     CreateNative("GetPlayerTagBool", SendDisplayingTag_Native);
     RegPluginLibrary("sntdb_tags");
 
+    lateLoad = late;
     return APLRes_Success;
 }
 
@@ -149,6 +152,11 @@ public void OnPluginStart()
     RegConsoleCmd("sm_tags", USR_OpenTagMenu, "/tags: Use this to open the tag menu!");
     RegConsoleCmd("sm_title", USR_OpenTagMenu, "/title: Use this to open the tag/title menu!");
     RegConsoleCmd("sm_titles", USR_OpenTagMenu, "/titles: Use this to open the tag/title menu!");
+
+    if (lateLoad)
+        for (int i = 1; i < MaxClients; i++)
+            if (SNT_IsValidClient(i))
+                OnClientPutInServer(i);
 }
 
 public void OnClientPutInServer(int client)

@@ -226,14 +226,7 @@ enum struct PlayerTrail
     }
 }
 
-public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
-{
-    CreateNative("OpenTrailMenu", SendPage1_Native);
-    CreateNative("OpenTrailEquip", SendEquipMenu_Native);
-    RegPluginLibrary("sntdb_trails");
-
-    return APLRes_Success;
-}
+bool lateLoad;
 
 Database DB_sntdb;
 char DBConfName[64];
@@ -253,6 +246,16 @@ Cookie ck_TrailWidth;
 
 PlayerTrail EqpdTrail[MAXPLAYERS + 1];
 TrailInfo Trails[64];
+
+public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
+{
+    CreateNative("OpenTrailMenu", SendPage1_Native);
+    CreateNative("OpenTrailEquip", SendEquipMenu_Native);
+    RegPluginLibrary("sntdb_trails");
+
+    lateLoad = late;
+    return APLRes_Success;
+}
 
 public void OnPluginStart()
 {
@@ -278,6 +281,26 @@ public void OnPluginStart()
 
     RegConsoleCmd("sm_trails", USR_OpenTrailMenu, "Use this to open the trail menu!");
     RegConsoleCmd("sm_trail", USR_OpenTrailMenu, "Use this to open the trail menu!");
+
+    if (lateLoad)
+    {
+        OnMapStart();
+        for (int i = 1; i < MaxClients; i++)
+            if (SNT_IsValidClient(i))
+            {
+                OnClientPutInServer(i);
+                if (IsPlayerAlive(i))
+                    if (EqpdTrail[i].Showing)
+                        if (EqpdTrail[i].EntityIndex != -1)
+                            UpdateTrail(i);
+                        else
+                        {
+                            CreateTrail(i);
+                            CreateTimer(0.1, Timer_ShowSprite, i);
+                        }
+            }
+    }
+
 }
 
 public void OnMapStart()
