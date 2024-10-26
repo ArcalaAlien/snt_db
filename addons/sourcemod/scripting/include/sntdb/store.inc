@@ -20,14 +20,14 @@ public SharedPlugin __pl_sntdbstore =
  *
  * @param client    Client index
  */
-native void OpenStoreMenu(int client);
+native void SNT_OpenStoreMenu(int client);
 
 /**
  * Opens the inventory menu for a client.
  *
  * @param client    Client index
  */
-native void OpenInventoryMenu(int client);
+native void SNT_OpenInventoryMenu(int client);
 
 /**
  * Get a client's name color.
@@ -36,7 +36,7 @@ native void OpenInventoryMenu(int client);
  * @param colorBuffer   char buffer for client's name color.
  * @param maxlen        length of char buffer
  */
-native void GetClientNameColor(int client, char[] colorBuffer, int maxlen);
+native void SNT_GetClientNameColor(int client, char[] colorBuffer, int maxlen);
 
 /**
  * Get a client's chat color.
@@ -45,7 +45,7 @@ native void GetClientNameColor(int client, char[] colorBuffer, int maxlen);
  * @param colorBuffer   char buffer for client's chat color.
  * @param maxlen        length of char buffer
  */
-native void GetClientChatColor(int client, char[] colorBuffer, int maxlen);
+native void SNT_GetClientChatColor(int client, char[] colorBuffer, int maxlen);
 
 /**
  *  Add credits to a client

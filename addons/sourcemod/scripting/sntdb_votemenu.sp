@@ -9,7 +9,7 @@
 #include <morecolors>
 
 #define REQUIRE_PLUGIN
-#include <sntdb_core>
+#include <sntdb/core>
 
 #define VOTE_NO "###no###"
 #define VOTE_YES "###yes###"
@@ -78,7 +78,7 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 
 public void OnPluginStart()
 {
-    LoadSQLConfigs(DBConfName, 64, Prefix, 96, SchemaName, 64, "VoteMenu");
+    SNT_LoadSQLConfigs(DBConfName, 64, Prefix, 96, SchemaName, 64, "VoteMenu");
     
     char error[255];
     DB_sntdb = SQL_Connect(DBConfName, true, error, sizeof(error));

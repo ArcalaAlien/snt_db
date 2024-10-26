@@ -4,91 +4,11 @@
 #include <clientprefs>
 #include <chat-processor>
 #include <morecolors>
-#include <sntdb_store>
+#include <sntdb/store>
+#include <sntdb/tags>
 
 #define REQUIRED_PLUGIN
-#include <sntdb_core>
-
-
-enum struct TagSettings
-{
-    bool IsTagDisplayed;
-    char TagId[64];
-    char TagName[64];
-    char TagDisplay[64];
-    char TagColor[64];
-    int TagPosition;
-
-    void SetShowingTag(bool enabled)
-    {
-        this.IsTagDisplayed = enabled;
-    }
-
-    void SetTagId(char[] tag_id)
-    {
-        strcopy(this.TagId, 64, tag_id);
-    }
-
-    void SetTagName(char[] tag_name)
-    {
-        strcopy(this.TagName, 64, tag_name);
-    }
-
-    void SetTagDisplay(char[] tag_display)
-    {
-        strcopy(this.TagDisplay, 64, tag_display);
-    }
-
-    void SetTagColor(char[] tag_color)
-    {
-        strcopy(this.TagColor, 64, tag_color);
-    }
-
-    void SetTagPos(int pos)
-    {
-        this.TagPosition = pos;
-    } 
-
-    bool GetShowingTag()
-    {
-        return this.IsTagDisplayed;
-    }
-
-    void GetTagId(char[] buffer, int maxlen)
-    {
-        strcopy(buffer, maxlen, this.TagId);
-    }
-
-    void GetTagName(char[] buffer, int maxlen)
-    {
-        strcopy(buffer, maxlen, this.TagName);
-    }
-
-    void GetTagDisplay(char[] buffer, int maxlen)
-    {
-        strcopy(buffer, maxlen, this.TagDisplay);
-    }
-
-    void GetTagColor(char[] buffer, int maxlen)
-    {
-        strcopy(buffer, maxlen, this.TagColor);
-    }
-
-    int GetTagPos()
-    {
-        return this.TagPosition;
-    }
-
-    void Reset()
-    {
-        this.IsTagDisplayed = false;
-        Format(this.TagColor, sizeof(this.TagColor), "NONE");
-        Format(this.TagDisplay, sizeof(this.TagDisplay), "NONE");
-        Format(this.TagId, sizeof(this.TagId), "NONE");
-        Format(this.TagName, sizeof(this.TagName), "NONE");
-        this.TagPosition = 0;
-    }
-}
+#include <sntdb/core>
 
 public Plugin myinfo =
 {
@@ -121,9 +41,9 @@ TagSettings PlayerTags[MAXPLAYERS + 1];
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
 {
 
-    CreateNative("OpenTagMenu", BuildTagsPage1_Native);
-    CreateNative("OpenTagEquip", SendTagEquip_Native);
-    CreateNative("GetPlayerTagBool", SendDisplayingTag_Native);
+    CreateNative("SNT_OpenTagMenu", BuildTagsPage1_Native);
+    CreateNative("SNT_OpenTagEquip", SendTagEquip_Native);
+    CreateNative("SNT_GetPlayerTagBool", SendDisplayingTag_Native);
     RegPluginLibrary("sntdb_tags");
 
     lateLoad = late;
@@ -132,7 +52,7 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 
 public void OnPluginStart()
 {
-    LoadSQLStoreConfigs(DBConfName, 64, Prefix, 96, StoreSchema, 64, "Tags", CurrencyName, 64, CurrencyColor, 64, credits_given, over_mins);
+    SNT_LoadSQLStoreConfigs(DBConfName, 64, Prefix, 96, StoreSchema, 64, "Tags", CurrencyName, 64, CurrencyColor, 64, credits_given, over_mins);
 
     PrintToServer("[SNT] Connecting to Database");
     char error[255];
@@ -425,9 +345,9 @@ public int TagsPage1_Handler(Menu menu, MenuAction action, int param1, int param
                 case 2:
                     BuildSettingsPanel(param1);
                 case 3:
-                    OpenInventoryMenu(param1);
+                    SNT_OpenInventoryMenu(param1);
                 case 4:
-                    OpenStoreMenu(param1);
+                    SNT_OpenStoreMenu(param1);
             }
         }
         case MenuAction_End:

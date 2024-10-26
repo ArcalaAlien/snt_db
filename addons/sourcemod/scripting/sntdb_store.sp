@@ -11,12 +11,12 @@
 // third party includes
 #include <morecolors>
 #include <chat-processor>
-#include <sntdb_sound>
-#include <sntdb_tags>
-#include <sntdb_trails>
+#include <sntdb/sound>
+#include <sntdb/tags>
+#include <sntdb/trails>
 
 #define REQUIRED_PLUGIN
-#include <sntdb_core>
+#include <sntdb/core>
 
 public Plugin myinfo =
 {
@@ -174,10 +174,10 @@ bool lateLoad;
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
 {
 
-    CreateNative("OpenStoreMenu", BuildPage1Store_Native);
-    CreateNative("OpenInventoryMenu", BuildPage1Inventory_Native);
-    CreateNative("GetClientNameColor",  SendClientNameColor_Native);
-    CreateNative("GetClientChatColor", SendClientChatColor_Native);
+    CreateNative("SNT_OpenStoreMenu", BuildPage1Store_Native);
+    CreateNative("SNT_OpenInventoryMenu", BuildPage1Inventory_Native);
+    CreateNative("SNT_GetClientNameColor",  SendClientNameColor_Native);
+    CreateNative("SNT_GetClientChatColor", SendClientChatColor_Native);
     CreateNative("SNT_AddCredits", AddCredits_Native);
     RegPluginLibrary("sntdb_store");
 
@@ -215,7 +215,7 @@ TrailInfo Trails[128];
 
 public void OnPluginStart()
 {
-    LoadSQLStoreConfigs(DBConfName, 64, Prefix, 96, StoreSchema, 64, "Main", CurrencyName, 64, CurrencyColor, 64, CFG_CreditsToGive, MinsTilCredits);
+    SNT_LoadSQLStoreConfigs(DBConfName, 64, Prefix, 96, StoreSchema, 64, "Main", CurrencyName, 64, CurrencyColor, 64, CFG_CreditsToGive, MinsTilCredits);
     LoadTranslations("common.phrases");
 
     PrintToServer("[SNT] Connecting to Database");
@@ -1093,7 +1093,7 @@ public int InvInfoPanel_Handler(Menu menu, MenuAction action, int param1, int pa
                             menu.DisplayAt(param1, GetMenuSelectionPosition(), 0);
                         }
                         case 2:
-                            OpenTagMenu(param1);
+                            SNT_OpenTagMenu(param1);
                         case 3:
                             BuildPage1Inventory(param1);
                         case 4:
@@ -1120,7 +1120,7 @@ public int InvInfoPanel_Handler(Menu menu, MenuAction action, int param1, int pa
                             menu.DisplayAt(param1, GetMenuSelectionPosition(), 0);
                         }
                         case 2:
-                            OpenSoundMenu(param1);
+                            SNT_OpenSoundMenu(param1);
                         case 3:
                             BuildPage1Inventory(param1);
                         case 4:
@@ -1133,7 +1133,7 @@ public int InvInfoPanel_Handler(Menu menu, MenuAction action, int param1, int pa
                     switch (param2)
                     {
                         case 1:
-                            OpenTrailMenu(param1);
+                            SNT_OpenTrailMenu(param1);
                         case 2:
                             BuildPage1Inventory(param1);
                         case 3:
@@ -1233,17 +1233,17 @@ public int ECatMenu_Handler(Menu menu, MenuAction action, int param1, int param2
                 case 1:
                 {
                     EmitSoundToClient(param1, "buttons/button14.wav");
-                    OpenTagEquip(param1);
+                    SNT_OpenTagEquip(param1);
                 }
                 case 2:
                 {
                     EmitSoundToClient(param1, "buttons/button14.wav");
-                    OpenSoundEquip(param1);
+                    SNT_OpenSoundEquip(param1);
                 }
                 case 3:
                 {
                     EmitSoundToClient(param1, "buttons/button14.wav");
-                    OpenTrailEquip(param1);
+                    SNT_OpenTrailEquip(param1);
                 }
                 case 4:
                 {
@@ -2169,7 +2169,7 @@ public Action ADM_RmvCredits (int client, int args)
 
 public Action ADM_ReloadCfgs (int client, int args)
 {
-    LoadSQLStoreConfigs(DBConfName, 64, Prefix, 96, StoreSchema, 64, "Main", CurrencyName, 64, CurrencyColor, 64, CFG_CreditsToGive, MinsTilCredits);
+    SNT_LoadSQLStoreConfigs(DBConfName, 64, Prefix, 96, StoreSchema, 64, "Main", CurrencyName, 64, CurrencyColor, 64, CFG_CreditsToGive, MinsTilCredits);
 
     DB_sntdb.Close();
 
@@ -2333,7 +2333,7 @@ public Action CP_OnChatMessage(int& author, ArrayList recipients, char[] flagstr
     PlayerTags[author].GetTagDisplay(TagDisplay, 64);
     PlayerTags[author].GetTagColor(TagColor, 64);
 
-    if (GetPlayerTagBool(author))
+    if (SNT_GetPlayerTagBool(author))
     {
         if (!StrEqual(TagDisplay, "NONE") && !StrEqual(TagColor, "NONE"))
         {

@@ -10,7 +10,7 @@
 #include <morecolors>
 
 #define REQUIRE_PLUGIN
-#include <sntdb_core>
+#include <sntdb/core>
 
 public Plugin myinfo =
 {
@@ -53,7 +53,7 @@ public void OnPluginStart()
         BuildPath(Path_SM, DebugFile, sizeof(DebugFile), "logs/sntdb_maps.log");
     }
 
-    LoadSQLConfigs(DBConfName, sizeof(DBConfName), Prefix, sizeof(Prefix), SchemaName, sizeof(SchemaName), "Maps");
+    SNT_LoadSQLConfigs(DBConfName, sizeof(DBConfName), Prefix, sizeof(Prefix), SchemaName, sizeof(SchemaName), "Maps");
 
     PrintToServer("[SNT] Connecting to Database");
     char error[255];

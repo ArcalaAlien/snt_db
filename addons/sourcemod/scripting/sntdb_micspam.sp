@@ -6,11 +6,9 @@
 #include <chat-processor>
 #include <morecolors>
 
-#include <sntdb_core>
-#include <sntdb_store>
-
-#define ICON_ON  "materials/icons/snt_mspam_on.vmt"
-#define ICON_OFF "materials/icons/snt_mspam_off.vmt"
+#include <sntdb/core>
+#include <sntdb/store>
+#include <sntdb/micspam>
 
 public Plugin myinfo =
 {
@@ -20,6 +18,8 @@ public Plugin myinfo =
     version = "1.0.0",
     url = "https://github.com/ArcalaAlien/snt_db"
 };
+
+bool lateLoad;
 
 Database DB_sntdb;
 char DBConfName[64];
@@ -55,15 +55,25 @@ Handle MSpamMoveToEnd = INVALID_HANDLE;
 Handle MicspamTimer = INVALID_HANDLE;
 Handle PreventTimer[MAXPLAYERS + 1] = {INVALID_HANDLE, ...};
 
+SNT_Icon clientIcon[MAXPLAYERS + 1];
+
+public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
+{
+    lateLoad = late;
+    return APLRes_Success;
+}
+
 public void OnPluginStart()
 {
-    LoadSQLConfigs(DBConfName, 64, Prefix, 96, SchemaName, 64, "Micspam", 1, StoreSchema, 64);
+    SNT_LoadSQLConfigs(DBConfName, 64, Prefix, 96, SchemaName, 64, "Micspam", 1, StoreSchema, 64);
     char error[255];
     DB_sntdb = SQL_Connect(DBConfName, true, error, sizeof(error));
     if (!StrEqual(error, ""))
     {
         PrintToServer("[SNT] ERROR IN STORE PLUGIN START: %s", error);
     }
+
+    HookEvent("post_inventory_application", Event_OnPlayerResupply);
 
     ck_ListeningToSpam = RegClientCookie("snt_listening", "Is the player listening to the micspam?", CookieAccess_Protected);
     ck_AutoJoin = RegClientCookie("snt_autojoin", "Does the user want to autojoin the queue?", CookieAccess_Protected);
@@ -74,24 +84,32 @@ public void OnPluginStart()
     cv_ExtendLimits = CreateConVar("snt_mspam_extendlimits", "1.0", "How many times a player can extend their micspam time", 0, true, 0.0);
 
     // Start micspamming
-    RegConsoleCmd("sm_start", USR_StartSpam, "/start Use this to start your micspam timer when it's your turn!");
-    RegConsoleCmd("sm_play", USR_StartSpam, "/play Use this to start your micspam timer when it's your turn!")
+    RegConsoleCmd("sm_starts", USR_StartSpam, "/starts Use this to start your micspam timer when it's your turn!");
+    RegConsoleCmd("sm_plays", USR_StartSpam, "/plays Use this to start your micspam timer when it's your turn!")
 
     // Stop micspamming
-    RegConsoleCmd("sm_stop", USR_EndSpam, "/stop Use this to end your timer and let the next person play!");
-    RegConsoleCmd("sm_end", USR_EndSpam, "/end Use this to end your timer and let the next person play!");
+    RegConsoleCmd("sm_stops", USR_EndSpam, "/stops Use this to end your timer and let the next person play!");
+    RegConsoleCmd("sm_ends", USR_EndSpam, "/ends Use this to end your timer and let the next person play!");
 
     // Join micspam queue
-    RegConsoleCmd("sm_join", USR_JoinQueue, "/join Use this to join the micspam queue!");
+    RegConsoleCmd("sm_joinq", USR_JoinQueue, "/joinq Use this to join the micspam queue!");
 
     // Leave micspam queue
-    RegConsoleCmd("sm_leave", USR_LeaveQueue, "/leave Use this to leave the micspam queue!");
+    RegConsoleCmd("sm_leaveq", USR_LeaveQueue, "/leaveq Use this to leave the micspam queue!");
 
     // Open micspam menu.
     RegConsoleCmd("sm_micspam", USR_OpenMicspamMenu, "/micspam Use this to open the micspam menu!");
     // /micspam | opens menu
     // /micspam extend | opens extend vote for all users listening
     // /micspam admin Opens admin menu.
+
+    for (int i = 1; i < MaxClients; i++)
+        clientIcon[i].reset();
+
+    if (lateLoad)
+        for (int i = 1; i < MaxClients; i++)
+            if (SNT_IsValidClient(i))
+                OnClientPutInServer(i);
 }
 
 public void OnMapStart()
@@ -101,11 +119,15 @@ public void OnMapStart()
         PrintToServer("[SNT] MICSPAM: Unable to precache ICON_ON.");
     if (PrecacheModel(ICON_OFF) == 0)
         PrintToServer("[SNT] MICSPAM: Unable to precache ICON_OFF.");
+    if (PrecacheModel(ICON_PAUSE) == 0)
+        PrintToServer("[SNT] MICSPAM: Unable to precache ICON_PAUSE.");
 
     AddFileToDownloadsTable(ICON_ON);
     AddFileToDownloadsTable("materials/icons/snt_mspam_on.vtf");
     AddFileToDownloadsTable(ICON_OFF);
     AddFileToDownloadsTable("materials/icons/snt_mspam_off.vtf");
+    AddFileToDownloadsTable(ICON_PAUSE);
+    AddFileToDownloadsTable("materials/icons/snt_mspam_pause.vtf");
 }
 
 public void OnClientPutInServer(int client)
@@ -114,7 +136,7 @@ public void OnClientPutInServer(int client)
     GetClientAuthId(client, AuthId_Steam3, SteamId, 64);
 
     char sQuery[256];
-    Format(sQuery, 256, "SELECT ItemId FROM %sInventories WHERE SteamId=\'%s\' AND LEFT(ItemId, 4)=\'srv_\'", StoreSchema, SteamId);
+    Format(sQuery, 256, "SELECT ItemId FROM %splayeritems WHERE SteamId=\'%s\' AND ItemId='srv_mspm'", StoreSchema, SteamId);
 
     SQL_TQuery(DB_sntdb, SQL_CheckForItem, sQuery, client);
 
@@ -155,53 +177,57 @@ public void OnClientPutInServer(int client)
 
 public void OnClientDisconnect(int client)
 {
-    int index = MicspamQueue.FindValue(client);
-    if (index != -1)
+    if (SNT_IsValidClient(client))
     {
-        MicspamQueue.Erase(index);
-        if (index == 0)
+        int index = MicspamQueue.FindValue(client);
+        if (index != -1)
         {
-            if (MSpam10sWarning != INVALID_HANDLE)
+            MicspamQueue.Erase(index);
+            if (index == 0)
             {
-                KillTimer(MSpam10sWarning);
-                MSpam10sWarning = INVALID_HANDLE;
-            }
-            
-            if (MSpamMoveToEnd != INVALID_HANDLE)
-            {
-                KillTimer(MSpamMoveToEnd);
-                MSpamMoveToEnd = INVALID_HANDLE;
-            }
-            
-            if (MicspamTimer != INVALID_HANDLE)
-            {
-                KillTimer(MicspamTimer);
-                MicspamTimer = INVALID_HANDLE;
-            }
+                if (MSpam10sWarning != INVALID_HANDLE)
+                {
+                    KillTimer(MSpam10sWarning);
+                    MSpam10sWarning = INVALID_HANDLE;
+                }
+                
+                if (MSpamMoveToEnd != INVALID_HANDLE)
+                {
+                    KillTimer(MSpamMoveToEnd);
+                    MSpamMoveToEnd = INVALID_HANDLE;
+                }
+                
+                if (MicspamTimer != INVALID_HANDLE)
+                {
+                    KillTimer(MicspamTimer);
+                    MicspamTimer = INVALID_HANDLE;
+                }
 
-            if (PreventTimer[client] != INVALID_HANDLE)
-            {
-                KillTimer(MicspamTimer);
-                PreventTimer[client] = INVALID_HANDLE;
-            }
+                if (PreventTimer[client] != INVALID_HANDLE)
+                {
+                    KillTimer(MicspamTimer);
+                    PreventTimer[client] = INVALID_HANDLE;
+                }
 
-            PlayerSpamming = false;
-            WarningSent30s = false;
-            WarningSent10s = false;
-        }
-        for (int i = 0; i <= GetClientCount(); i++)
-        {
-            if (!IsFakeClient(i))
+                PlayerSpamming = false;
+                WarningSent30s = false;
+                WarningSent10s = false;
+            }
+            for (int i = 1; i < MaxClients; i++)
             {
-                SetListenOverride(i, client, Listen_Default);
+                if (SNT_IsValidClient(i))
+                {
+                    SetListenOverride(i, client, Listen_Default);
+                }
             }
         }
+
+        PlayerListening[client] = true;
+        WillAutoJoin[client] = false;
+        OwnsMicspamItem[client] = false;
+        BlockedByAdmin[client] = false;
+        clientIcon[client].reset();
     }
-
-    PlayerListening[client] = true;
-    WillAutoJoin[client] = false;
-    OwnsMicspamItem[client] = false;
-    BlockedByAdmin[client] = false;
 }
 
 public Action OnPlayerRunCmd(int client)
@@ -233,6 +259,15 @@ public Action OnPlayerRunCmd(int client)
             }
         }
     }
+    return Plugin_Continue;
+}
+
+public Action Event_OnPlayerResupply(Event event, const char[] name, bool dontBroadcast)
+{
+    int client = GetClientOfUserId(GetEventInt(event, "userid"));
+    if (SNT_IsValidClient(client))
+        clientIcon[client].createSprite(client);
+    
     return Plugin_Continue;
 }
 
@@ -392,11 +427,13 @@ void StartSpamming(int client)
         WarningSent30s = false;
         WarningSent10s = false;
         PlayerSpamming = true;
+        clientIcon[client].isSpamming = true;
+        clientIcon[client].updateSprite(client, 1);
         CPrintToChat(client, "%s Started spamming! Ye've got 5 minutes!\nYe can ask yer crewmates to lengthen yer time by typing {greenyellow}/micspam extend{default} or sailing to the {greenyellow}/micspam{default} menu!", Prefix);
 
-        for (int i = 1; i <= GetClientCount(); i++)
+        for (int i = 1; i < MaxClients; i++)
         {
-            if (!IsFakeClient(i) && PlayerListening[i])
+            if (SNT_IsValidClient(i) && PlayerListening[i])
                 SetListenOverride(i, client, Listen_Yes);
         }
 
@@ -426,8 +463,11 @@ void StopSpamming(int client)
         PlayerSpamming = false;
 
         MicspamQueue.Erase(index);
-        MicspamQueue.ShiftUp(index);
+        if (MicspamQueue.Length != 0)
+            MicspamQueue.ShiftUp(index);
         MicspamQueue.Push(client);
+        clientIcon[client].isSpamming = false;
+        clientIcon[client].updateSprite(client);
         CPrintToChat(client, "%s Sucessfully moved ye to the aft o' the queue! Ye be now number: %i", Prefix, MicspamQueue.Length);
 
         if (MicspamTimer != INVALID_HANDLE)
@@ -436,7 +476,7 @@ void StopSpamming(int client)
             MicspamTimer = INVALID_HANDLE;
         }
 
-        for (int i = 1; i <= GetClientCount(); i++)
+        for (int i = 1; i < MaxClients; i++)
         {
             if (PlayerListening[i])
                 SetListenOverride(i, client, Listen_No);
@@ -480,7 +520,7 @@ void SendExtendVote(int sender)
     EVoteMenu.ExitButton = false;
 
     int Listeners[MAXPLAYERS + 1]
-    for (int i = 0; i <= GetClientCount(); i++)
+    for (int i = 1; i < MaxClients; i++)
     {
         if (PlayerListening[i] && i != sender)
         {
@@ -514,7 +554,7 @@ void SendStopVote(int sender)
     SVoteMenu.ExitButton = false;
 
     int Listeners[MAXPLAYERS + 1]
-    for (int i = 1; i <= GetClientCount(); i++)
+    for (int i = 1; i < MaxClients; i++)
     {
         if (PlayerListening[i])
         {
@@ -531,7 +571,7 @@ void JoinSpamQ(int client)
     GetClientAuthId(client, AuthId_Steam3, SteamId, 64);
 
     char sQuery[256];
-    Format(sQuery, 256, "SELECT ItemId FROM %sInventories WHERE SteamId=\'%s\' AND LEFT(ItemId, 4)=\'srv_\'", StoreSchema, SteamId);
+    Format(sQuery, 256, "SELECT ItemId FROM %splayeritems WHERE SteamId=\'%s\' AND ItemId='srv_mspm'", StoreSchema, SteamId);
 
     SQL_TQuery(DB_sntdb, SQL_CheckForItem, sQuery, client);
     
@@ -539,13 +579,16 @@ void JoinSpamQ(int client)
     {
         MicspamQueue.Push(client);
         CPrintToChat(client, "%s Ye've been added to the micspam queue!", Prefix);
-        for (int i = 1; i <= GetClientCount(); i++)
+        clientIcon[client].createSprite(client);
+        for (int i = 1; i < MaxClients; i++)
         {
-            if (!IsFakeClient(i))
+            if (SNT_IsValidClient(i))
             {
                 SetListenOverride(i, client, Listen_No);
             }
         }
+
+        
     }
     else if (!OwnsMicspamItem[client])
     {
@@ -573,11 +616,14 @@ void LeaveSpamQ(int client)
             PastSender = 0;
         }
         MicspamQueue.Erase(index);
-        MicspamQueue.ShiftUp(1);
+        if (MicspamQueue.Length != 0)
+            MicspamQueue.ShiftUp(index);
+        clientIcon[client].killSprite(client);
+        clientIcon[client].reset();
         CPrintToChat(client, "%s Ye've been removed from the miscpam queue!", Prefix);
-        for (int i = 1; i <= GetClientCount(); i++)
+        for (int i = 1; i < MaxClients; i++)
         {
-            if (!IsFakeClient(i))
+            if (SNT_IsValidClient(i))
             {
                 SetListenOverride(i, client, Listen_Default);
             }
@@ -597,9 +643,9 @@ void LeaveSpamQ(int client)
 
 void MuteAllSpammers(int client)
 {
-    for (int i = 1; i < GetClientCount(); i++)
+    for (int i = 1; i < MaxClients; i++)
     {
-        if (!IsFakeClient(i))
+        if (SNT_IsValidClient(i))
         {
             int index = MicspamQueue.FindValue(i);
             if (index != -1)
@@ -610,9 +656,9 @@ void MuteAllSpammers(int client)
 
 void UnmuteAllSpammers(int client)
 {
-    for (int i = 1; i < GetClientCount(); i++)
+    for (int i = 1; i < MaxClients; i++)
     {
-        if (!IsFakeClient(i))
+        if (SNT_IsValidClient(i))
         {
             int index = MicspamQueue.FindValue(i);
             if (index != -1)
@@ -648,7 +694,7 @@ public int EVoteMenu_Handler(Menu menu, MenuAction action, int param1, int param
             {
                 TimesExtended++;
                 TimeLeft += cv_ExtendTime.FloatValue;
-                for (int i = 0; i <= GetClientCount(); i++)
+                for (int i = 1; i < MaxClients; i++)
                 {
                     if (PlayerListening[i])
                     {
@@ -659,7 +705,7 @@ public int EVoteMenu_Handler(Menu menu, MenuAction action, int param1, int param
             }
             else
             {
-                for (int i = 0; i <= GetClientCount(); i++)
+                for (int i = 1; i < MaxClients; i++)
                 {
                     if (PlayerListening[i])
                     {
@@ -690,7 +736,7 @@ public int SVoteMenu_Handler(Menu menu, MenuAction action, int param1, int param
             if (param1 == 0)
             {
                 StopSpamming(Spammer);
-                for (int i = 0; i <= GetClientCount(); i++)
+                for (int i = 1; i <= MaxClients; i++)
                 {
                     if (PlayerListening[i])
                     {
@@ -701,7 +747,7 @@ public int SVoteMenu_Handler(Menu menu, MenuAction action, int param1, int param
             }
             else
             {
-                for (int i = 0; i <= GetClientCount(); i++)
+                for (int i = 1; i < MaxClients; i++)
                 {
                     if (PlayerListening[i])
                     {
@@ -782,7 +828,7 @@ public int Page1_Handler(Menu menu, MenuAction action, int param1, int param2)
                             case 1:
                             {
                                 EmitSoundToClient(param1, "buttons/button14.wav");
-                                OpenStoreMenu(param1);
+                                SNT_OpenStoreMenu(param1);
                             }
                             case 2:
                             {
@@ -1123,7 +1169,7 @@ public int Page1Admin_Handler(Menu menu, MenuAction action, int param1, int para
                     Menu PlayerList = new Menu(PreventPlayerPage1_Handler, MENU_ACTIONS_DEFAULT);
                     PlayerList.SetTitle("Choose a player to prevent joining the queue");
                     
-                    for (int i = 1; i <= GetClientCount(); i++)
+                    for (int i = 1; i < MaxClients; i++)
                     {
                         char PlayerName[128];
                         GetClientName(i, PlayerName, 128);
@@ -1164,10 +1210,11 @@ public void SQL_CheckForItem(Database db, DBResultSet results, const char[] erro
 {
     while (SQL_FetchRow(results))
     {
+        
         char ItemId[64];
         SQL_FetchString(results, 0, ItemId, 64);
 
-        if (StrEqual(ItemId, "srv_mspam"))
+        if (StrEqual(ItemId, "srv_mspm"))
             OwnsMicspamItem[data] = true;
             return;
     }
@@ -1216,6 +1263,7 @@ public Action Timer_MoveToEnd(Handle timer, any client)
 
 public Action Timer_MicspamTimer(Handle timer, any client)
 {
+
     int index = MicspamQueue.FindValue(client);
     if (index != -1)
     {
@@ -1262,7 +1310,7 @@ public Action USR_OpenMicspamMenu(int client, int args)
     GetClientAuthId(client, AuthId_Steam3, SteamId, 64);
 
     char sQuery[256];
-    Format(sQuery, 256, "SELECT ItemId FROM %sInventories WHERE SteamId=\'%s\' AND LEFT(ItemId, 4)=\'srv_\'", StoreSchema, SteamId);
+    Format(sQuery, 256, "SELECT ItemId FROM %splayeritems WHERE SteamId=\'%s\' AND ItemId='srv_mspm'", StoreSchema, SteamId);
 
     SQL_TQuery(DB_sntdb, SQL_CheckForItem, sQuery, client);
 

@@ -51,6 +51,7 @@ enum struct SNT_ClientInfo
     int     Position;
     int     KS;
     float   KSMult;
+    int     CreditMulti;
     bool    OwnsRankItem;
     bool    DisplayingRank;
     int     DisplayRankPos; // 0 for before, 1 for after.
@@ -193,6 +194,11 @@ enum struct SNT_ClientInfo
         this.KSMult = num;
     }
 
+    void SetCreditMultiplier(int multi)
+    {
+        this.CreditMulti = multi;
+    }
+
     void SetTeam(any new_team)
     {
         this.Team = new_team;
@@ -316,6 +322,11 @@ enum struct SNT_ClientInfo
         return this.KSMult;
     }
 
+    int GetCreditMulti()
+    {
+        return this.CreditMulti;
+    }
+
     any GetTeam()
     {
         return this.Team;
@@ -386,7 +397,7 @@ enum struct SNT_ClientInfo
  * @param   colorlen                size of currency color buffer.
  * @return                          Returns 1 on success, 0 on fail.
  */
-native bool LoadSQLConfigs(const char[] dbconfig_name, int maxlength, const char[] prefix, int prefixlen, const char[] schema, int schemalen, const char[] calledby, int usingstore=0, const char[] store_schema={' '}, int storelen=0, const char[] currency_name={' '}, int currencylen=0, const char[] currency_color={' '}, int colorlen=0);
+native bool SNT_LoadSQLConfigs(const char[] dbconfig_name, int maxlength, const char[] prefix, int prefixlen, const char[] schema, int schemalen, const char[] calledby, int usingstore=0, const char[] store_schema={' '}, int storelen=0, const char[] currency_name={' '}, int currencylen=0, const char[] currency_color={' '}, int colorlen=0);
 
 /**
  * Loads the configs for the map module from configs/sntdb/main_config.cfg
@@ -406,28 +417,35 @@ native bool LoadSQLConfigs(const char[] dbconfig_name, int maxlength, const char
  * @param   over_mins               The X minute interval.
  * @return                          Returns 1 on success, 0 on fail.
  */
-native bool LoadSQLStoreConfigs(const char[] dbconfig_name, int maxlength, const char[] prefix, int prefixlen, const char[] schema, int schemalen, const char[] calledby, const char[] currency_name={' '}, int maxlencur=1, const char[] currency_color={' '}, int maxlencol=1, int& credits_given, float& over_mins);
+native bool SNT_LoadSQLStoreConfigs(const char[] dbconfig_name, int maxlength, const char[] prefix, int prefixlen, const char[] schema, int schemalen, const char[] calledby, const char[] currency_name={' '}, int maxlencur=1, const char[] currency_color={' '}, int maxlencol=1, int& credits_given, float& over_mins);
 
 /**
  * @param   timezone        0 - EST, 1 - PST, 2 - CET
  * @param   current_time    Char buffer to store server time in.
  * @param   maxlen          length of char buffer
  */
-native void GetServerTime(int timezone, char[] current_time, int maxlen);
+native void SNT_GetServerTime(int timezone, char[] current_time, int maxlen);
 
 /**
  * @param current_day   char buffer to store day
  * @param maxlen        max len of char buffer
  */
-native void GetServerDay(char[] current_day, int maxlen);
+native void SNT_GetServerDay(char[] current_day, int maxlen);
 
 /**
  * @return true if friday, saturday, or sunday. false otherwise.
  */
-native bool CheckForWeekend();
+native bool SNT_CheckForWeekend();
 
 /**
  * @param client    Client index to check
  * @return          true if IsClientConnected, IsClientInGame return true and IsFakeClient returns false, otherwise false.
  */
 native bool SNT_IsValidClient(int client);
+
+/**
+ *  Check to see if the map is a Combat Surf, a Skill Surf, or an Arena Surf.
+ * 
+ *  @return 0 - Combat Surf, 1 - Skill Surf, 2 - Arena Surf
+ */
+native int SNT_CheckMapType();

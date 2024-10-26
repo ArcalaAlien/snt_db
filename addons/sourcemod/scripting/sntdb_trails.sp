@@ -8,26 +8,12 @@
 #include <keyvalues>
 
 #include <morecolors>
-#include <sntdb_store>
+#include <stocksoup/entity_tools>
+#include <sntdb/store>
+#include <sntdb/trails>
 
 #define REQUIRE_PLUGIN 
-#include <sntdb_core>
-
-// 12 Modes
-#define RED {255, 0, 0}
-#define ORANGE {255, 180, 0}
-#define YELLOW {255, 255, 0}
-#define YELLOWGREEN {180, 255, 0}
-#define GREEN {0, 255, 0}
-#define GREENBLUE {0, 255, 180}
-#define CYAN {0, 255, 255}
-#define BLUEGREEN {0, 180, 255}
-#define BLUE {0, 0, 255}
-#define PURPLE {180, 0, 255}
-#define PINK {255, 0, 255}
-#define MAGENTA {255, 0, 180}
-#define WHITE {255, 255, 255}
-#define GREY {180, 180, 180}
+#include <sntdb/core>
 
 public Plugin myinfo =
 {
@@ -37,194 +23,6 @@ public Plugin myinfo =
     version = "1.0.0",
     url = "https://github.com/ArcalaAlien/snt_db"
 };
-
-enum struct TrailInfo
-{
-    int TrailIndex;
-    char TrailId[64];
-    char TrailName[64];
-    char TrailVMT[256];
-
-    void SetId(char[] new_id)
-    {
-        strcopy(this.TrailId, 64, new_id);
-    }
-
-    void SetName(char[] new_name)
-    {
-        strcopy(this.TrailName, 64, new_name);
-    }
-
-    void SetVMT(char[] vmt)
-    {
-        strcopy(this.TrailVMT, 256, vmt);
-    }
-
-    void GetId(char[] buffer, int maxlen)
-    {
-        strcopy(buffer, maxlen, this.TrailId);
-    }
-
-    void GetName(char[] buffer, int maxlen)
-    {
-        strcopy(buffer, maxlen, this.TrailName);
-    }
-
-    void GetVMT(char[] buffer, int maxlen)
-    {
-        strcopy(buffer, maxlen, this.TrailVMT);
-    }
-}
-
-enum struct PlayerTrail
-{
-    bool Showing;
-    int EntityIndex;
-    char TrailId[64];
-    char TrailName[64];
-    char TrailVMT[256];
-    int TrailIndex;
-    int Color[4];
-    int Frame;
-    float LastPos[3];
-    float Width;
-
-    void SetId(char[] trail_id)
-    {
-        strcopy(this.TrailId, 64, trail_id);
-    }
-
-    void SetName(char[] trail_name)
-    {
-        strcopy(this.TrailName, 64, trail_name);
-    }
-
-    void SetVMT(char[] vmt)
-    {
-        strcopy(this.TrailVMT, 256, vmt);
-    }
-
-    void SetRGB(int new_color[3])
-    {
-        this.Color[0] = new_color[0];
-        this.Color[1] = new_color[1];
-        this.Color[2] = new_color[2];
-    }
-
-    void SetRGBA(int new_color[4])
-    {
-        this.Color[0] = new_color[0];
-        this.Color[1] = new_color[1];
-        this.Color[2] = new_color[2];
-        this.Color[3] = new_color[3];
-    }
-
-    void StrToColor4(char[] clr_str)
-    {
-        char RGBA[4][4];
-        ExplodeString(clr_str, ",", RGBA, 4, 4);
-
-        int R = StringToInt(RGBA[0]);
-        int G = StringToInt(RGBA[1]);
-        int B = StringToInt(RGBA[2]);
-        int A = StringToInt(RGBA[3]);
-
-        if (R > 255)
-            R = 255;
-        else if (G > 255)
-            G = 255;
-        else if (B > 255)
-            B = 255;
-        else if (A > 255)
-            A = 255;
-        else if (R < 0)
-            R = 0;
-        else if (G < 0)
-            G = 0;
-        else if (B < 0)
-            B = 0;
-        else if (A < 0)
-            A = 0;
-
-        this.Color[0] = R;
-        this.Color[1] = G;
-        this.Color[2] = B;
-        this.Color[3] = A;
-    }
-
-    void SetAlpha(int alpha=130)
-    {
-        this.Color[3] = alpha;
-    }
-
-    void SetLastPos(float pos[3])
-    {
-        this.LastPos[0] = pos[0];
-        this.LastPos[1] = pos[1];
-        this.LastPos[2] = pos[2];
-    }
-
-    void GetId(char[] buffer, int maxlen=64)
-    {
-        strcopy(buffer, maxlen, this.TrailId);
-    }
-
-    void GetName(char[] buffer, int maxlen=64)
-    {
-        strcopy(buffer, maxlen, this.TrailName);
-    }
-
-    void GetVMT(char[] buffer, int maxlen=256)
-    {
-        strcopy(buffer, maxlen, this.TrailVMT);
-    }
-
-
-    void GetRGB(int color_buffer[3])
-    {
-        color_buffer[0] = this.Color[0];
-        color_buffer[1] = this.Color[1];
-        color_buffer[2] = this.Color[2];
-    }
-
-    void GetRGBA(int color_buffer[4])
-    {
-        color_buffer[0] = this.Color[0];
-        color_buffer[1] = this.Color[1];
-        color_buffer[2] = this.Color[2];
-        color_buffer[3] = this.Color[3];
-    }
-
-    int GetAlpha()
-    {
-        return this.Color[3];
-    }
-
-    void ColorToStr(char[] buffer, int maxlen=24)
-    {
-        Format(buffer, maxlen, "%i,%i,%i,%i", this.Color[0], this.Color[1], this.Color[2], this.Color[3]);
-    }
-
-    void GetLastPos(float pos[3])
-    {
-        pos[0] = this.LastPos[0];
-        pos[1] = this.LastPos[1];
-        pos[2] = this.LastPos[2];
-    }
-
-    void Reset()
-    {
-        this.Showing = false;
-        this.EntityIndex = -1;
-        strcopy(this.TrailId, 64, "NONE");
-        strcopy(this.TrailName, 64, "NONE");
-        strcopy(this.TrailVMT, 256, "");
-        this.TrailIndex = -1;
-        this.Color = {255, 255, 255, 255};
-        this.LastPos = {0.0, 0.0, 0.0};
-        this.Width = 8.0;
-    }
-}
 
 bool lateLoad;
 
@@ -249,8 +47,8 @@ TrailInfo Trails[64];
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
 {
-    CreateNative("OpenTrailMenu", SendPage1_Native);
-    CreateNative("OpenTrailEquip", SendEquipMenu_Native);
+    CreateNative("SNT_OpenTrailMenu", SendPage1_Native);
+    CreateNative("SNT_OpenTrailEquip", SendEquipMenu_Native);
     RegPluginLibrary("sntdb_trails");
 
     lateLoad = late;
@@ -259,7 +57,7 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 
 public void OnPluginStart()
 {
-    LoadSQLStoreConfigs(DBConfName, 64, Prefix, 96, StoreSchema, 64, "Trails", CurrencyName, 64, CurrencyColor, 64, credits_given, over_mins);
+    SNT_LoadSQLStoreConfigs(DBConfName, 64, Prefix, 96, StoreSchema, 64, "Trails", CurrencyName, 64, CurrencyColor, 64, credits_given, over_mins);
 
     PrintToServer("[SNT] Connecting to Database");
     char error[255];
@@ -279,6 +77,7 @@ public void OnPluginStart()
     ck_TrailColor = RegClientCookie("trail_color", "r,g,b,a RGBA values separated by columns, used to color a trail.", CookieAccess_Protected);
     ck_TrailWidth = RegClientCookie("trail_width", "The width in hammer units of a player's trail.", CookieAccess_Protected);
 
+    RegAdminCmd("sm_refreshtrail", ADM_RefreshTrails, ADMFLAG_KICK, "Refresh all of the current trails in the server.");
     RegConsoleCmd("sm_trails", USR_OpenTrailMenu, "Use this to open the trail menu!");
     RegConsoleCmd("sm_trail", USR_OpenTrailMenu, "Use this to open the trail menu!");
 
@@ -407,8 +206,8 @@ void CreateTrail(int client)
             DispatchKeyValueInt(ent_trail, "rendermode", 5);
             DispatchKeyValue(ent_trail, "disablereceiveshadows", "true");
 
-            char trail_name[16];
-            Format(trail_name, 16, "snt_trail_%i", client);
+            char trail_name[32];
+            Format(trail_name, 32, "snt_trail_%i", client);
             DispatchKeyValue(ent_trail, "targetname", trail_name);
 
             if (!DispatchSpawn(ent_trail))
@@ -594,6 +393,10 @@ void SendPage1(int client)
     EqpdTrail[client].GetName(TrailName, 96);
     Format(TrailName, 96, "Equipped: %s", TrailName);
 
+    char targetname[32];
+    Format(targetname, sizeof(targetname), "snt_trail_%i", client);
+    EqpdTrail[client].TrailIndex = FindEntityByTargetName(-1, targetname, "env_spritetrail");
+
     Page1Panel.DrawItem("Equip a trail!");
     Page1Panel.DrawText(" ");
     Page1Panel.DrawItem("Trail Settings");
@@ -607,12 +410,18 @@ void SendPage1(int client)
 
 void SendPage1_Native(Handle plugin, int params)
 {
+    int client = GetNativeCell(1);
+
     Panel Page1Panel = CreatePanel();
     Page1Panel.SetTitle("Trail Menu");
 
     char TrailName[96];
     EqpdTrail[GetNativeCell(1)].GetName(TrailName, 96);
     Format(TrailName, 96, "Equipped: %s", TrailName);
+
+    char targetname[32];
+    Format(targetname, sizeof(targetname), "snt_trail_%i", client);
+    EqpdTrail[client].TrailIndex = FindEntityByTargetName(-1, targetname, "env_spritetrail");
 
     Page1Panel.DrawItem("Equip a trail!");
     Page1Panel.DrawText(" ");
@@ -622,7 +431,7 @@ void SendPage1_Native(Handle plugin, int params)
     Page1Panel.DrawItem("Yer Treasure");
     Page1Panel.DrawItem("The Tavern");
     Page1Panel.DrawItem("Exit");
-    Page1Panel.Send(GetNativeCell(1), MainPage1_Handler, 0);
+    Page1Panel.Send(client, MainPage1_Handler, 0);
 }
 
 void SendEquipMenu_Native(Handle plugin, int params)
@@ -1132,12 +941,12 @@ public int MainPage1_Handler(Menu menu, MenuAction action, int param1, int param
                 case 4:
                 {
                     EmitSoundToClient(param1, "buttons/button14.wav");
-                    OpenInventoryMenu(param1);
+                    SNT_OpenInventoryMenu(param1);
                 }
                 case 5:
                 {
                     EmitSoundToClient(param1, "buttons/button14.wav");
-                    OpenStoreMenu(param1);
+                    SNT_OpenStoreMenu(param1);
                 }
                 case 6:
                 {
@@ -1406,5 +1215,28 @@ public Action USR_OpenTrailMenu(int client, int args)
             CReplyToCommand(client, "{fullred} If ye want to change yer trail's color, do '/trail color r,g,b,a' or use '/trail' to visit the trail menu!");
         }
     }
+    return Plugin_Handled;
+}
+
+public Action ADM_RefreshTrails(int client, int args)
+{
+    if (args > 0)
+        return Plugin_Handled;
+    
+    for (int i = 1; i < MaxClients; i++)
+    {
+
+        char entName[32];
+        Format(entName, sizeof(entName), "snt_trail_%i", i);
+
+        int trailEnt = FindEntityByTargetName(-1, "snt_trail_%i", "env_spritetrail");
+
+        if (trailEnt != - 1)
+            AcceptEntityInput(trailEnt, "Kill");
+
+        if (EqpdTrail[i].Showing)
+            CreateTrail(i);
+    }
+
     return Plugin_Handled;
 }

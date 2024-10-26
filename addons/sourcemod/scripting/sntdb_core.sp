@@ -9,6 +9,9 @@
 
 #include <morecolors>
 
+#include <sntdb/core>
+#include <sntdb/store>
+
 #define MSG01 "Have an issue with a player? Report them to an admin on our discord server!Use {greenyellow}discord.gg/xnuHA5KsEU{default} to join us and make a post in #public-staff-chat!"
 #define MSG02 "Are there no admins currently online? Use {greenyellow}/calladmin {default}to call an admin, or {greenyellow}/votemenu {default}to handle it yourself."
 #define MSG03 "Welcome to {greenyellow}Surf'n'Turf!{default}\nJoin our discord community at {greenyellow}discord.gg/xnuHA5KsEU{default}!"
@@ -56,12 +59,6 @@ TODO:
                 First place gets (award)
                 Second place gets (award * .5) rounded down
                 Third place gets (award * .25) rounded down
-
-        OnMapLoad:
-            Use GetTime() to get current time/date as unix timestamp
-            Use FormatTime() to format the unix timestamp into something readable.
-            Use https://cplusplus.com/reference/ctime/strftime/ as reference for format syntax.
-
         switch (Holiday)
             case birthday:
                 use birthday_mapcycle.txt
@@ -106,19 +103,26 @@ Handle InfoTimer = INVALID_HANDLE;
 
 bool lateLoad;
 
+bool isSkurfMap;
+bool isArenaMap;
+
 // Convars
 ConVar TimeBetweenMessages;
 ConVar EventCooldown;
+ConVar mapType;
+ConVar isWeekendConVar;
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
 {
 
-    CreateNative("LoadSQLConfigs", ReadSQLConfigs);
-    CreateNative("LoadSQLStoreConfigs", ReadSQLStoreConfigs);
-    CreateNative("GetServerTime", GetServerTime_Native);
-    CreateNative("GetServerDay", GetServerDay_Native);
-    CreateNative("CheckForWeekend", CheckWeekend_Native);
-    CreateNative("SNT_IsValidClient",   IsValidClient_Native);
+    CreateNative("SNT_LoadSQLConfigs", Native_LoadSQLConfigs);
+    CreateNative("SNT_LoadSQLStoreConfigs", Native_LoadSQLStoreConfigs);
+    CreateNative("SNT_GetServerTime", Native_GetServerTime);
+    CreateNative("SNT_GetServerDay", Native_GetServerDay);
+    CreateNative("SNT_CheckForWeekend", CheckWeekend_Native);
+    CreateNative("SNT_IsValidClient",   Native_IsValidClient);
+    CreateNative("SNT_CheckMapType", Native_CheckForMap);
+    //CreateNative("SNT_CopyPlayerInfo", Native_CopyPlayerInfo);
     RegPluginLibrary("sntdb_core");
 
     lateLoad = late;
@@ -164,10 +168,13 @@ public void OnPluginStart()
 
     EventCooldown = CreateConVar("snt_event_cooldown", "480", "The cooldown time in seconds between events.", 0, true, 300.0);
     TimeBetweenMessages = CreateConVar("snt_msg_cooldown", "300", "The amount in seconds between each info message in chat.", 0, true, 180.0);
+    mapType = CreateConVar("snt_map_type", "0", "What type of map this is. 0 - Combat, 1 - Skill Surf, 2 - Arena Surf", 0, true, 0.0, true, 2.0);
+    isWeekendConVar = CreateConVar("snt_is_weekend", "0", "Is it the weekend?", 0, true, 0.0, true, 1.0);
 
     RegConsoleCmd("sm_info", USR_OpenInfoMenu, "Usage: /info Opens the server info menu!");
     RegConsoleCmd("sm_r", USR_Respawn, "Usage: /r to respawn!");
     RegConsoleCmd("sm_respawn", USR_Respawn, "Usage: /respawn to respawn!");
+    RegAdminCmd("sm_goto", ADM_GotoPlayer, ADMFLAG_GENERIC,"Usage: /goto <player>");
     //RegAdminCmd("sm_snt_events",    ADM_OpenEventsMenu,      ADMFLAG_GENERIC,    "/snt_events: Use this to open the events menu.");
     //RegAdminCmd("sm_datetest",     ADM_TestPlugin,          ADMFLAG_GENERIC,    "test this bitch");
     //RegAdminCmd("sm_snt_groupmod",  ADM_ModGroup,           ADMFLAG_BAN,        "/snt_groupmod <gid> <user>: Toggle a user's group id. Type list with no user to list all groups");
@@ -178,11 +185,13 @@ public void OnPluginStart()
 
 public void OnMapStart()
 {
-    InfoTimer = CreateTimer(TimeBetweenMessages.FloatValue, Timer_DisplayInfo, 0, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
+    CheckMapType();
+    SetWeekend();
 }
 
 public void OnMapEnd()
 {
+    mapType.SetInt(0, true);
     if (InfoTimer != INVALID_HANDLE)
         KillTimer(InfoTimer);
 }
@@ -204,11 +213,11 @@ public void OnClientDisconnect(int client)
 
 public void OnClientConnected(int client)
 {
-    int timeLeft;
-    GetMapTimeLeft(timeLeft);
+    // int timeLeft;
+    // GetMapTimeLeft(timeLeft);
 
-    if (timeLeft < -1)
-        ExtendMapTimeLimit((60 * 30));
+    // if (timeLeft < -1)
+    //     ExtendMapTimeLimit((60 * 30));
 }
 
 public Action CP_OnChatMessage(int& author, ArrayList recipients, char[] flagstring, char[] name, char[] message, bool & processcolors, bool & removecolors)
@@ -294,7 +303,79 @@ bool CheckWeekend()
         return false;
 }
 
-public void GetServerTime_Native(Handle plugin, int params)
+void SetWeekend()
+{
+    if (CheckWeekend())
+        isWeekendConVar.SetBool(true, true);
+    else
+        isWeekendConVar.SetBool(false, true);
+}
+
+void CheckMapType()
+{
+    char currentMap[256];
+    char skurfListPath[PLATFORM_MAX_PATH];
+    char arenaListPath[PLATFORM_MAX_PATH];
+    GetCurrentMap(currentMap, sizeof(currentMap));
+    Format(skurfListPath, sizeof(skurfListPath), "cfg/skurf_mapcycle.txt");
+    Format(arenaListPath, sizeof(arenaListPath), "cfg/asurf_mapcycle.txt");
+
+    InfoTimer = CreateTimer(TimeBetweenMessages.FloatValue, Timer_DisplayInfo, 0, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
+    File skurfList = OpenFile(skurfListPath, "r");
+    File arenaList = OpenFile(arenaListPath, "r");
+
+    if (skurfList == null)
+        PrintToServer("[SNT] ERROR! Unable to find skill surf maplist at cfg/skurf_mapcycle.txt");
+    else if (arenaList == null)
+        PrintToServer("[SNT] ERROR! Unable to find arena surf maplsit at cfg/asurf_mapcycle.txt");
+    else
+    {
+        char line[256];
+        do
+        {
+            TrimString(line);
+            if (StrEqual(line, currentMap))
+            {
+                PrintToServer("Found a skurf map!");
+                mapType.SetInt(1, true);
+                skurfList.Close();
+                arenaList.Close();
+                break;
+            }
+        }
+        while(skurfList.ReadLine(line, sizeof(line)));
+
+        if (mapType.IntValue == 1)
+            return;
+        else
+        {
+            do
+            {
+                TrimString(line);
+                if (StrEqual(line, currentMap))
+                {
+                    PrintToServer("Found an arena map!");
+                    mapType.SetInt(2, true);
+                    skurfList.Close();
+                    arenaList.Close();
+                    break;
+                }
+            }
+            while(arenaList.ReadLine(line, sizeof(line)));
+        }
+
+        if (mapType.IntValue == 2)
+            return;
+    }
+
+    PrintToServer("Map is a combat surf");
+    mapType.SetInt(0, true);
+
+    skurfList.Close();
+    arenaList.Close();
+}
+
+public void Native_GetServerTime(Handle plugin, int params)
 {
     int currentTime = GetTime();
 
@@ -330,7 +411,7 @@ public void GetServerTime_Native(Handle plugin, int params)
     }
 }
 
-public void GetServerDay_Native(Handle plugin, int params)
+public void Native_GetServerDay(Handle plugin, int params)
 {
     int currentTime = GetTime() - (4*60*60);
     char currentDay[16];
@@ -352,7 +433,7 @@ public any CheckWeekend_Native(Handle plugin, int params)
         return false;
 }
 
-public any IsValidClient_Native(Handle plugin, int params)
+public any Native_IsValidClient(Handle plugin, int params)
 {
     int client = GetNativeCell(1)
     if (IsClientConnected(client) && IsClientInGame(client) && !IsFakeClient(client))
@@ -361,7 +442,7 @@ public any IsValidClient_Native(Handle plugin, int params)
         return false;
 }
 
-public any ReadSQLConfigs(Handle plugin, int numParams)
+public any Native_LoadSQLConfigs(Handle plugin, int numParams)
 {
     KeyValues ConfigFile = new KeyValues("ConfigFile");
     char ConfigFilePath[PLATFORM_MAX_PATH];
@@ -446,7 +527,7 @@ public any ReadSQLConfigs(Handle plugin, int numParams)
     return true;
 }
 
-public any ReadSQLStoreConfigs(Handle plugin, int numParams)
+public any Native_LoadSQLStoreConfigs(Handle plugin, int numParams)
 {
     KeyValues ConfigFile = new KeyValues("ConfigFile");
     char ConfigFilePath[PLATFORM_MAX_PATH];
@@ -514,6 +595,16 @@ public any ReadSQLStoreConfigs(Handle plugin, int numParams)
     return true;
 }
 
+public int Native_CheckForMap(Handle plugin, int numParams)
+{
+    if (isSkurfMap)
+        return 1;
+    else if (isArenaMap)
+        return 2;
+    else
+        return 0;
+}
+
 void BuildFeaturesMenu(int client)
 {
     Menu FeaturesList_Menu = new Menu(FeaturesList_Handler, MENU_ACTIONS_DEFAULT);
@@ -556,17 +647,21 @@ public int StaffPanel_Handler(Menu menu, MenuAction action, int param1, int para
                 }
                 case 4:
                 {
+
+                }
+                case 5:
+                {
                     CPrintToChat(param1, "%s weeabruh's Steam Profile: {greenyellow}https://steamcommunity.com/id/weeabruv/", Prefix);
                     delete menu;
                 }
-                case 5:
+                case 6:
                 {
                     CPrintToChat(param1, "%s twerp's Steam Profile: {greenyellow}https://steamcommunity.com/profiles/76561198347557315/", Prefix);
                     delete menu;
                 }
-                case 6:
-                    BuildInfo_Page1(param1);
                 case 7:
+                    BuildInfo_Page1(param1);
+                case 8:
                     delete menu;
             }
         }
@@ -734,6 +829,19 @@ public int InfoPage1_Handler(Menu menu, MenuAction action, int param1, int param
             {
                 case 1:
                 {
+                    // Menu StaffList_Menu = CreateMenu(StaffMenu_Handler);
+                    // StaffList_Menu.SetTitle("Surf'n'Turf Staff Members");
+                    // StaffList_Menu.AddItem("X", "Owners", ITEMDRAW_DISABLED);
+                    // StaffList_Menu.AddItem("lucas", "LucasDoofus");
+                    // StaffList_Menu.AddItem("linux", "WebmasterMatt");
+                    // StaffList_Menu.AddItem("arcala", "Arcala The Gyiyg");
+                    // StaffList_Menu.AddItem("X", "Admins", ITEMDRAW_DISABLED);
+                    // StaffList_Menu.AddItem("twerp", "twerp");
+                    // StaffList_Menu.AddItem("hexi", "Hexi");
+                    // StaffList_Menu.AddItem("X", "Moderators", ITEMDRAW_DISABLED);
+
+
+
                     Panel StaffList_Panel = CreatePanel();
                     StaffList_Panel.SetTitle("Surf'n'Turf Staff Members");
                     StaffList_Panel.DrawText(" ");
@@ -746,7 +854,8 @@ public int InfoPage1_Handler(Menu menu, MenuAction action, int param1, int param
                     StaffList_Panel.DrawItem("twerp");
                     StaffList_Panel.DrawText(" ");
                     StaffList_Panel.DrawText("Moderators");
-                    StaffList_Panel.DrawItem("Omega");
+                    StaffList_Panel.DrawItem("Omega (M)");
+                    
                     StaffList_Panel.DrawText(" ");
                     StaffList_Panel.DrawItem("Info Menu");
                     StaffList_Panel.DrawItem("Exit");
@@ -800,31 +909,31 @@ public void SQL_ErrorHandler(Database db, DBResultSet results, const char[] erro
 
 public Action Timer_WelcomeMessage(Handle timer, any data)
 {
-    char timeEST[16];
-    char timePST[16];
-    char timeCET[16];
-    char currentDay[16];
-    char currentDate[16];
-
-    FormatTime(currentDate, 16, "%m/%d", GetTime() - (4*60*60));
-    GetServerDay(currentDay, 16);
-    GetServerTime(0, timeEST, 16);
-    GetServerTime(1, timePST, 16);
-    GetServerTime(2, timeCET, 16);
-
     if (PlayerJoined[data] != 1 && ValidateClient(data))
     {
+        char timeEST[16];
+        char timePST[16];
+        char timeCET[16];
+        char currentDay[16];
+        char currentDate[16];
+
+        FormatTime(currentDate, 16, "%m/%d", GetTime() - (4*60*60));
+        GetServerDay(currentDay, 16);
+        GetServerTime(0, timeEST, 16);
+        GetServerTime(1, timePST, 16);
+        GetServerTime(2, timeCET, 16);
+
         char PlayerName[128];
         GetClientName(data, PlayerName, 128);
         EmitSoundToClient(data, "snt_sounds/ypp_login.mp3");
         CPrintToChat(data, "{yellowgreen}Ahoy! Welcome ye to the crew, {default}%s!", PlayerName);
         CPrintToChat(data, "%s The date is: {orange}%s %s", Prefix, currentDay, currentDate);
         CPrintToChat(data, "%s EST: {orange}%s{default} PST: {orange}%s{default} CET: {orange}%s{default}", Prefix, timeEST, timePST, timeCET);
-        CPrintToChat(data, "%s We have a huge variety of maps! Don't forget to use {greenyellow}/nominate{default} to check them out!", Prefix);
+        CPrintToChat(data, "%s We have a huge variety of maps! Use {greenyellow}/nominate{default} to check them out!", Prefix);
         //CPrintToChat(data, "The current time is {rblxlightblue}%i:%s %s CEST\n{yellowgreen}%i:%s %s EST, {orange}%i:%s %s PST", CESTHour, CurrentMinute, CESTAMPM, ESTHour, CurrentMinute, ESTAMPM, PSTHour, CurrentMinute, PSTAMPM);
         PlayerJoined[data] = 1;
     }
-    return Plugin_Continue;
+    return Plugin_Stop;
 }
 
 public Action Timer_DisplayInfo(Handle timer, any data)
@@ -944,6 +1053,35 @@ public Action USR_Respawn (int client, int args)
 
     if (ValidateClient(client))
         TF2_RespawnPlayer(client);
+
+    return Plugin_Handled;
+}
+
+public Action ADM_GotoPlayer(int client, int args)
+{
+    if (client == 0)
+        return Plugin_Handled;
+
+    char arg[MAX_NAME_LENGTH];
+    GetCmdArg(1, arg, sizeof(arg));
+
+    int targs[MAXPLAYERS + 1]
+    bool tn_is_ml;
+    if (ProcessTargetString(arg, client, targs, sizeof(targs), COMMAND_FILTER_CONNECTED | COMMAND_FILTER_NO_BOTS, arg, sizeof(arg), tn_is_ml) == COMMAND_TARGET_AMBIGUOUS)
+    {
+        CPrintToChat(client, "%s Unable to teleport, multiple targets.", Prefix);
+    }
+    else
+    {
+        if (SNT_IsValidClient(targs[0]))
+        {
+            float targPos[3];
+            GetClientAbsOrigin(targs[0], targPos);
+
+            targPos[2] += 96.0;
+            TeleportEntity(client, targPos);
+        }
+    }
 
     return Plugin_Handled;
 }

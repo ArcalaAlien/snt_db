@@ -1,15 +1,18 @@
 #include <sourcemod>
 #include <clientprefs>
+#include <tf2>
+#include <tf2_stocks>
 #include <sdktools>
 #include <dbi>
 #include <files>
 #include <keyvalues>
 #include <morecolors>
 #include <chat-processor>
-#include <sntdb_store>
+#include <sntdb/store>
+#include <sntdb/sound>
 
 #define REQUIRED_PLUGIN 
-#include <sntdb_core>
+#include <sntdb/core>
 
 
 public Plugin myinfo =
@@ -21,269 +24,10 @@ public Plugin myinfo =
     url = "https://github.com/ArcalaAlien/snt_db"
 };
 
-/*
-CP_OnPlayerChat:
-    if player's message contains any sound name play the sound to all cleints
-    as long as the client has chat sounds enabled.
-*/
-
-enum struct SoundSlots
-{
-    char Slot1Id[64];
-    char Slot1Name[64];
-    char Slot1File[256];
-    float Slot1Cooldown;
-
-    char Slot2Id[64];
-    char Slot2Name[64];
-    char Slot2File[256];
-    float Slot2Cooldown;
-
-    char Slot3Id[64];
-    char Slot3Name[64];
-    char Slot3File[256];
-    float Slot3Cooldown;
-
-    char SlotConId[64];
-    char SlotConName[64];
-    char SlotConFile[256];
-
-    char SlotDisconId[64];
-    char SlotDisconName[64];
-    char SlotDisconFile[256];
-
-    char SlotDeathId[64];
-    char SlotDeathName[64];
-    char SlotDeathFile[256];
-
-    char PreviousMessage[512];
-
-    bool OwnsConnectItem;
-    bool OwnsDeathItem;
-    bool OwnsSpectatorItem;
-    bool ConnectSoundsEnabled;
-
-    void SetSlotId(int slot, const char[] sound_id)
-    {
-        switch (slot)
-        {
-            case 0:
-                strcopy(this.Slot1Id, 64, sound_id);
-            case 1:
-                strcopy(this.Slot2Id, 64, sound_id);
-            case 2:
-                strcopy(this.Slot3Id, 64, sound_id);
-            case 3:
-                strcopy(this.SlotConId, 64, sound_id);
-            case 4:
-                strcopy(this.SlotDisconId, 64, sound_id);
-            case 5:
-                strcopy(this.SlotDeathId, 64, sound_id);
-        }
-    }
-
-    void SetSlotName(int slot, const char[] sound_name)
-    {
-        switch (slot)
-        {
-            case 0:
-                strcopy(this.Slot1Name, 64, sound_name);
-            case 1:
-                strcopy(this.Slot2Name, 64, sound_name);
-            case 2:
-                strcopy(this.Slot3Name, 64, sound_name);
-            case 3:
-                strcopy(this.SlotConName, 64, sound_name);
-            case 4:
-                strcopy(this.SlotDisconName, 64, sound_name);
-            case 5:
-                strcopy(this.SlotDeathName, 64, sound_name);
-        }
-    }
-
-    void SetSlotFile(int slot, const char[] sound_file)
-    {
-        switch (slot)
-        {
-            case 0:
-                strcopy(this.Slot1File, 64, sound_file);
-            case 1:
-                strcopy(this.Slot2File, 64, sound_file);
-            case 2:
-                strcopy(this.Slot3File, 64, sound_file);
-            case 3:
-                strcopy(this.SlotConFile, 64, sound_file);
-            case 4:
-                strcopy(this.SlotDisconFile, 64, sound_file);
-            case 5:
-                strcopy(this.SlotDeathFile, 64, sound_file);
-        }
-    }
-
-    void SetSlotCooldown(int slot, float time)
-    {
-        switch (slot)
-        {
-            case 0:
-                this.Slot1Cooldown = time;
-            case 1:
-                this.Slot2Cooldown = time;
-            case 2:
-                this.Slot3Cooldown = time;
-            default:
-                PrintToServer("[SNT] ERROR: No Slot for cooldown");
-        }
-    }
-
-    void SetOwnsItem(int item, bool owns)
-    {
-        switch (item)
-        {
-            case 0:
-                this.OwnsConnectItem = owns;
-            case 1:
-                this.OwnsDeathItem = owns;
-            case 2:
-                this.OwnsSpectatorItem = owns;
-        }
-    }
-
-    void SetConnectEnabled(bool enabled)
-    {
-        this.ConnectSoundsEnabled = enabled;
-    }
-
-    void SetPreviousMessage(char[] previous_message)
-    {
-        strcopy(this.PreviousMessage, 512, previous_message);
-    }
-
-    void GetSlotId(int slot, char[] sound_id, int maxlen)
-    {
-        switch (slot)
-        {
-            case 0:
-                strcopy(sound_id, maxlen, this.Slot1Id);
-            case 1:
-                strcopy(sound_id, maxlen, this.Slot2Id);
-            case 2:
-                strcopy(sound_id, maxlen, this.Slot3Id);
-            case 3:
-                strcopy(sound_id, maxlen, this.SlotConId);
-            case 4:
-                strcopy(sound_id, maxlen, this.SlotDisconId);
-            case 5:
-                strcopy(sound_id, maxlen, this.SlotDeathId);
-        }
-    }
-
-    void GetSlotName(int slot, char[] sound_name, int maxlen)
-    {
-        switch (slot)
-        {
-            case 0:
-                strcopy(sound_name, maxlen, this.Slot1Name);
-            case 1:
-                strcopy(sound_name, maxlen, this.Slot2Name);
-            case 2:
-                strcopy(sound_name, maxlen, this.Slot3Name);
-            case 3:
-                strcopy(sound_name, maxlen, this.SlotConName);
-            case 4:
-                strcopy(sound_name, maxlen, this.SlotDisconName);
-            case 5:
-                strcopy(sound_name, maxlen, this.SlotDeathName);
-        }
-    }
-
-    void GetSlotFile(int slot, char[] sound_file, int maxlen)
-    {
-        switch (slot)
-        {
-            case 0:
-                strcopy(sound_file, maxlen, this.Slot1File);
-            case 1:
-                strcopy(sound_file, maxlen, this.Slot2File);
-            case 2:
-                strcopy(sound_file, maxlen, this.Slot3File);
-            case 3:
-                strcopy(sound_file, maxlen, this.SlotConFile);
-            case 4:
-                strcopy(sound_file, maxlen, this.SlotDisconFile);
-            case 5:
-                strcopy(sound_file, maxlen, this.SlotDeathFile);
-        }
-    }
-
-    float GetSlotCooldown(int slot)
-    {
-        switch (slot)
-        {
-            case 0:
-                return this.Slot1Cooldown;
-            case 1:
-                return this.Slot1Cooldown;
-            case 2:
-                return this.Slot1Cooldown;
-        }
-        return 2.0;
-    }
-
-    void GetPrevMessage (char[] buffer, int maxlen)
-    {
-        strcopy(buffer, maxlen, this.PreviousMessage);
-    }
-
-    bool GetOwnsItem(int item)
-    {
-        switch (item)
-        {
-            case 0:
-                return this.OwnsConnectItem;
-            case 1:
-                return this.OwnsDeathItem;
-            case 2:
-                return this.OwnsSpectatorItem;
-        }
-        return false;
-    }
-
-    bool GetIsConnEnabled()
-    {
-        return this.ConnectSoundsEnabled;
-    }
-
-    void Reset()
-    {
-        strcopy(this.Slot1Id, 64, "");
-        strcopy(this.Slot2Id, 64, "");
-        strcopy(this.Slot3Id, 64, "");
-        strcopy(this.SlotConId, 64, "");
-        strcopy(this.SlotDisconId, 64, "");
-        strcopy(this.Slot1Name, 64, "");
-        strcopy(this.Slot2Name, 64, "");
-        strcopy(this.Slot3Name, 64, "");
-        strcopy(this.SlotConName, 64, "");
-        strcopy(this.SlotDisconName, 64, "");
-        strcopy(this.Slot1File, 64, "");
-        strcopy(this.Slot2File, 64, "");
-        strcopy(this.Slot3File, 64, "");
-        strcopy(this.SlotConFile, 64, "");
-        strcopy(this.SlotDisconFile, 64, "");
-        strcopy(this.PreviousMessage, 512, "");
-        this.Slot1Cooldown = 2.0;
-        this.Slot2Cooldown = 2.0;
-        this.Slot3Cooldown = 2.0;
-        this.OwnsConnectItem = false;
-        this.ConnectSoundsEnabled = true;
-    }
-}
-
 bool lateLoad;
 
 SNT_ClientInfo Player[MAXPLAYERS + 1];
 SoundSlots PlayerSounds[MAXPLAYERS + 1];
-bool IsChtCooldown[MAXPLAYERS + 1];
 bool IsSlt1Cooldown[MAXPLAYERS + 1];
 bool IsSlt2Cooldown[MAXPLAYERS + 1];
 bool IsSlt3Cooldown[MAXPLAYERS + 1];
@@ -330,8 +74,8 @@ Cookie ck_ConnectionSoundsEnabled;
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
 {
 
-    CreateNative("OpenSoundMenu", BuildSoundPanel_Native);
-    CreateNative("OpenSoundEquip", SendEquipMenu_Native);
+    CreateNative("SNT_OpenSoundMenu", BuildSoundPanel_Native);
+    CreateNative("SNT_OpenSoundEquip", SendEquipMenu_Native);
     RegPluginLibrary("sntdb_sound");
 
     lateLoad = late;
@@ -340,7 +84,7 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 
 public void OnPluginStart()
 {
-    LoadSQLStoreConfigs(DBConfName, 64, Prefix, 96, StoreSchema, 64, "Sounds", CurrencyName, 64, CurrencyColor, 64, credits_to_give, over_time);
+    SNT_LoadSQLStoreConfigs(DBConfName, 64, Prefix, 96, StoreSchema, 64, "Sounds", CurrencyName, 64, CurrencyColor, 64, credits_to_give, over_time);
 
     PrintToServer("[SNT] Connecting to Database");
     char error[255];
@@ -929,17 +673,11 @@ public int SoundPanel_Handler(Menu menu, MenuAction action, int param1, int para
                     EquipCategory.Send(param1, ECategoryPanel_Handler, MENU_TIME_FOREVER);
                 }
                 case 2:
-                {
                     BuildSettingsPanel(param1);
-                }
                 case 3:
-                {
-                    OpenInventoryMenu(param1);
-                }
+                    SNT_OpenInventoryMenu(param1);
                 case 4:
-                {
-                    OpenStoreMenu(param1);
-                }
+                    SNT_OpenStoreMenu(param1);
                 case 5:
                 {
                     EmitSoundToClient(param1, "buttons/combine_button7.wav");
@@ -1135,8 +873,8 @@ public int ECategoryPanel_Handler(Menu menu, MenuAction action, int param1, int 
             Format(sQuery2, 512, "SELECT ItemId FROM %sInventories WHERE SteamId=\'%s\'", StoreSchema, SteamId);
             SQL_TQuery(DB_sntdb, SQL_CheckForSoundItems, sQuery2, param1);
 
-            DataPack Info_Choice = CreateDataPack();
-            Info_Choice.WriteCell(param1);
+            // DataPack Info_Choice = CreateDataPack();
+            // Info_Choice.WriteCell(param1);
             switch (param2)
             {
                 case 1:
@@ -1199,22 +937,22 @@ public int ECategoryPanel_Handler(Menu menu, MenuAction action, int param1, int 
                 case 3:
                 {
                     EmitSoundToClient(param1, "buttons/button14.wav");
-                    Info_Choice.Close()
+                    // Info_Choice.Close()
                     BuildSoundPanel(param1);
                     return 0;
                 }
                 case 4:
                 {
                     EmitSoundToClient(param1, "buttons/combine_button7.wav");
-                    Info_Choice.Close();
+                    // Info_Choice.Close();
                     delete menu;
                     return 0;
                 }
             }
 
-            char sQuery[512];
-            Format(sQuery, 512, "SELECT SteamId, ItemId, SoundName FROM %sInventories WHERE SUBSTR(ItemId, 1, 4)=\'snd_\' AND SteamId=\'%s\' ORDER BY SoundName ASC", StoreSchema, SteamId);
-            SQL_TQuery(DB_sntdb, SQL_GetPlayerSounds, sQuery, Info_Choice);
+            // char sQuery[512];
+            // Format(sQuery, 512, "SELECT SteamId, ItemId, SoundName FROM %sInventories WHERE SUBSTR(ItemId, 1, 4)=\'snd_\' AND SteamId=\'%s\' ORDER BY SoundName ASC", StoreSchema, SteamId);
+            // SQL_TQuery(DB_sntdb, SQL_GetPlayerSounds, sQuery, Info_Choice);
         }
     }
     return 0;
@@ -1239,7 +977,7 @@ public int EquipMenu_Handler(Menu menu, MenuAction action, int param1, int param
             Choice_Info.WriteString(ItemSplit[1]);
 
             char sQuery[512];
-            Format(sQuery, 512, "SELECT ItemId, SoundName, SoundFile, Cooldown FROM %ssounds", StoreSchema);
+            Format(sQuery, 512, "SELECT ItemId, SoundName, SoundFile, Cooldown FROM %ssounds where ItemId='%s'", StoreSchema, ItemSplit[1]);
             SQL_TQuery(DB_sntdb, SQL_EquipSound, sQuery, Choice_Info);
         }
     }
@@ -1414,7 +1152,7 @@ public void SQL_EquipSound(Database db, DBResultSet results, const char[] error,
                         PlayerSounds[client].SetSlotName(0, SQL_SoundName);
                         PlayerSounds[client].SetSlotFile(0, SQL_SoundFile);
                         PlayerSounds[client].SetSlotCooldown(0, SQL_FetchFloat(results, 3));
-
+                        PrintToServer("Client %i Slot Cooldown: %f", client, SQL_FetchFloat(results, 3));
                         CPrintToChat(client, "%s Sucessfully equipped {greenyellow}%s {default}as your slot 1 sound!", Prefix, SQL_SoundName);
                     }
                     SetSlotCookies(client, 0);
@@ -1439,7 +1177,7 @@ public void SQL_EquipSound(Database db, DBResultSet results, const char[] error,
                         PlayerSounds[client].SetSlotName(1, SQL_SoundName);
                         PlayerSounds[client].SetSlotFile(1, SQL_SoundFile);
                         PlayerSounds[client].SetSlotCooldown(1, SQL_FetchFloat(results, 3));
-
+                        PrintToServer("Client %i Slot Cooldown: %f", client, SQL_FetchFloat(results, 3));
                         CPrintToChat(client, "%s Sucessfully equipped {greenyellow}%s {default}as your slot 2 sound!", Prefix, SQL_SoundName);
                     }
                     SetSlotCookies(client, 1);
@@ -1464,7 +1202,7 @@ public void SQL_EquipSound(Database db, DBResultSet results, const char[] error,
                         PlayerSounds[client].SetSlotName(2, SQL_SoundName);
                         PlayerSounds[client].SetSlotFile(2, SQL_SoundFile);
                         PlayerSounds[client].SetSlotCooldown(2, SQL_FetchFloat(results, 3));
-
+                        PrintToServer("Client %i Slot Cooldown: %f", client, SQL_FetchFloat(results, 3));
                         CPrintToChat(client, "%s Sucessfully equipped {greenyellow}%s {default}as your slot 3 sound!", Prefix, SQL_SoundName);
                     }
                     SetSlotCookies(client, 2);
@@ -1563,8 +1301,6 @@ public Action Timer_Cooldown(Handle timer, DataPack data)
             IsSlt2Cooldown[client] = false;
         case 2:
             IsSlt3Cooldown[client] = false;
-        case 3:
-            IsChtCooldown[client] = false;
     }
     return Plugin_Continue;
 }
@@ -1604,19 +1340,15 @@ public Action USR_PlaySlot1(int client, int args)
         EmitAmbientSound(SoundFile, player_pos, client);
         float Cooldown;
 
-        if (GetClientTeam(client) == 1)
-        {
-            Cooldown = 3.0;
-        }
-        else
-        {
+        if (TF2_GetClientTeam(client) != TFTeam_Spectator)
             Cooldown = PlayerSounds[client].GetSlotCooldown(0);
-        }
+        else
+            Cooldown = 1.0;
 
         DataPack Timer_Info = CreateDataPack();
-        CreateDataTimer(Cooldown, Timer_Cooldown, Timer_Info, TIMER_DATA_HNDL_CLOSE);
         Timer_Info.WriteCell(client);
         Timer_Info.WriteCell(0);
+        CreateTimer(Cooldown, Timer_Cooldown, Timer_Info, TIMER_DATA_HNDL_CLOSE);
     }
     return Plugin_Handled;
 }
@@ -1656,19 +1388,15 @@ public Action USR_PlaySlot2(int client, int args)
         EmitAmbientSound(SoundFile, player_pos, client);
         float Cooldown;
 
-        if (GetClientTeam(client) == 1)
-        {
-            Cooldown = 3.0;
-        }
-        else
-        {
+        if (TF2_GetClientTeam(client) != TFTeam_Spectator)
             Cooldown = PlayerSounds[client].GetSlotCooldown(1);
-        }
+        else
+            Cooldown = 1.0;
 
         DataPack Timer_Info = CreateDataPack();
-        CreateDataTimer(Cooldown, Timer_Cooldown, Timer_Info, TIMER_DATA_HNDL_CLOSE);
         Timer_Info.WriteCell(client);
         Timer_Info.WriteCell(1);
+        CreateTimer(Cooldown, Timer_Cooldown, Timer_Info, TIMER_DATA_HNDL_CLOSE);
     }
     return Plugin_Handled;
 }
@@ -1708,19 +1436,15 @@ public Action USR_PlaySlot3(int client, int args)
         EmitAmbientSound(SoundFile, player_pos, client);
         float Cooldown;
 
-        if (GetClientTeam(client) == 1)
-        {
-            Cooldown = 3.0;
-        }
-        else
-        {
+        if (TF2_GetClientTeam(client) != TFTeam_Spectator)
             Cooldown = PlayerSounds[client].GetSlotCooldown(2);
-        }
+        else
+            Cooldown = 1.0;
 
         DataPack Timer_Info = CreateDataPack();
-        CreateDataTimer(Cooldown, Timer_Cooldown, Timer_Info, TIMER_DATA_HNDL_CLOSE);
         Timer_Info.WriteCell(client);
         Timer_Info.WriteCell(2);
+        CreateTimer(Cooldown, Timer_Cooldown, Timer_Info, TIMER_DATA_HNDL_CLOSE);
     }
     return Plugin_Handled;
 }
