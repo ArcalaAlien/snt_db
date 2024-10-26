@@ -11,8 +11,12 @@
 #include <chat-processor>
 #include <morecolors>
 
+#include <sntdb/ranks>
+
+#undef REQUIRE_PLUGIN
+#include <sntdb/core>
+#include <sntdb/store>
 #define REQUIRE_PLUGIN
-#include <sntdb_core>
 
 public Plugin myinfo =
 {
@@ -23,279 +27,24 @@ public Plugin myinfo =
     url = "https://github.com/ArcalaAlien/snt_db"
 };
 
-// Settings
-enum struct PSettings
-{
-    // Colors for displaying ranks before client names. Places NONE - 3rd, plus default color.
-    char pl0clr[32];
-    char pl1clr[32];
-    char pl2clr[32];
-    char pl3clr[32];
-    char pldclr[32];
-
-    // Red and blu team's colors. Used to color names in chat.
-    char rtmclr[32];
-    char btmclr[32];
-
-    // How many points per kill, assist, and assist if you're med.
-    float pntkill;
-    float pntasst;
-    float pntasstmed;
-
-    void GetPlaceColor(int place = 0, char[] buffer, int maxlen)
-    {
-        switch (place)
-        {
-            case 0:
-                strcopy(buffer, maxlen, this.pl0clr);
-            case 1:
-                strcopy(buffer, maxlen, this.pl1clr);
-            case 2:
-                strcopy(buffer, maxlen, this.pl2clr);
-            case 3:
-                strcopy(buffer, maxlen, this.pl3clr);
-            default:
-                strcopy(buffer, maxlen, this.pldclr);
-        }
-    }
-
-    void GetTeamColor(int team, char[] buffer, int maxlen)
-    {
-        switch (team)
-        {
-            case 2:
-                strcopy(buffer, maxlen, this.rtmclr);
-            case 3:
-                strcopy(buffer, maxlen, this.btmclr);
-        }
-    }
-
-    float GetKillPts()
-    {
-        return this.pntkill;
-    }
-
-    float GetAsstPts()
-    {
-        return this.pntasst;
-    }
-
-    float GetAsstPtsMed()
-    {
-        return this.pntasstmed;
-    }
-
-    void SetPlaceColor(int place, char[] color)
-    {
-        switch (place)
-        {
-            case 0:
-                strcopy(this.pl0clr, 32, color);
-            case 1:
-                strcopy(this.pl1clr, 32, color);
-            case 2:
-                strcopy(this.pl2clr, 32, color);
-            case 3:
-                strcopy(this.pl3clr, 32, color);
-            default:
-                strcopy(this.pldclr, 32, color);
-        }
-    }
-
-    void SetTeamColor(int team, char[] color)
-    {
-        switch (team)
-        {
-            case 2:
-                strcopy(this.rtmclr, 32, color);
-            case 3:
-                strcopy(this.btmclr, 32, color);
-        }
-    }
-
-    void SetKillPts(float points)
-    {
-        this.pntkill = points;
-    }
-
-    void SetAsstPts(float points)
-    {
-        this.pntasst = points;
-    }
-
-    void SetAsstPtsMed(float points)
-    {
-        this.pntasstmed = points;
-    }
-}
-
-enum struct KSSettings
-{
-
-    // Level 1 - 4 Display. EG: 'Player is %s' where %s is l1-4
-    char l1[32];
-    char l2[32];
-    char l3[32];
-    char l4[32];
-
-    // The color to display %s above in
-    char l1c[32];
-    char l2c[32];
-    char l3c[32];
-    char l4c[32];
-
-    // The amount of kills to get to each level.
-    int l1k;
-    int l2k;
-    int l3k;
-    int l4k;
-
-    // Each level's point modifier.
-    float l1m;
-    float l2m;
-    float l3m;
-    float l4m;
-
-    void GetLevelDisplay(int level, char[] buffer, int maxlen)
-    {
-        switch (level)
-        {
-            case 1:
-                strcopy(buffer, maxlen, this.l1);
-            case 2:
-                strcopy(buffer, maxlen, this.l2);
-            case 3:
-                strcopy(buffer, maxlen, this.l3);
-            case 4:
-                strcopy(buffer, maxlen, this.l4);
-        }
-    }
-
-    void GetLevelColor(int level, char[] buffer, int maxlen)
-    {
-        switch (level)
-        {
-            case 1:
-                strcopy(buffer, maxlen, this.l1c);
-            case 2:
-                strcopy(buffer, maxlen, this.l2c);
-            case 3:
-                strcopy(buffer, maxlen, this.l3c);
-            case 4:
-                strcopy(buffer, maxlen, this.l4c);
-        }
-    }
-
-    int GetKillsForLevel(int level)
-    {
-        switch (level)
-        {
-            case 1:
-                return this.l1k;
-            case 2:
-                return this.l2k;
-            case 3:
-                return this.l3k;
-            case 4:
-                return this.l4k;
-            default:
-                return this.l1k;
-        }
-    }
-
-    float GetMultiplier(int level)
-    {
-        switch (level)
-        {
-            case 1:
-                return this.l1m;
-            case 2:
-                return this.l2m;
-            case 3:
-                return this.l3m;
-            case 4:
-                return this.l4m;
-            default:
-                return this.l1m;
-        }
-    }
-
-    void SetLevelDisplay(int level, char[] display)
-    {
-        switch (level)
-        {
-            case 1:
-                strcopy(this.l1, 32, display);
-            case 2:
-                strcopy(this.l2, 32, display);
-            case 3:
-                strcopy(this.l3, 32, display);
-            case 4:
-                strcopy(this.l4, 32, display);
-            default:
-                strcopy(this.l1, 32, display);
-        }
-    }
-
-    void SetLevelColor(int level, char[] color)
-    {
-        switch (level)
-        {
-            case 1:
-                strcopy(this.l1c, 32, color);
-            case 2:
-                strcopy(this.l2c, 32, color);
-            case 3:
-                strcopy(this.l3c, 32, color);
-            case 4:
-                strcopy(this.l4c, 32, color);
-            default:
-                strcopy(this.l1c, 32, color);
-        }
-    }
-
-    void SetKillsForLevel(int level, int amt)
-    {
-        switch (level)
-        {
-            case 1:
-                this.l1k = amt;
-            case 2:
-                this.l2k = amt;
-            case 3:
-                this.l3k = amt;
-            case 4:
-                this.l4k = amt;
-            default:
-                this.l1k = amt;
-        }
-    }
-
-    void SetMultiplier(int level, float multi)
-    {
-        switch (level)
-        {
-            case 1:
-                this.l1m = multi;
-            case 2:
-                this.l2m = multi;
-            case 3:
-                this.l3m = multi;
-            case 4:
-                this.l4m = multi;
-            default:
-                this.l1m = multi;
-        }
-    }
-}
-
 // Setup plugin settings
 char DBConfName[64];
 char SchemaName[64];
 char StoreSchema[64]
+char CurrencyName[64];
+char CurrencyColor[64];
 char Prefix[96];
 PSettings PointCfg;
 KSSettings KSCfg;
+
+// Date info!
+char s1_start[12];
+char s2_start[12];
+char s3_start[12];
+char s4_start[12];
+
+bool seasonStart = false;
+bool pointsUpdated = false;
 
 // Setup Player Variables
 SNT_ClientInfo Player[MAXPLAYERS + 1];
@@ -308,10 +57,25 @@ Database DB_sntdb;
 
 // Setup Convars
 ConVar BroadcastKillstreaks;
+ConVar SpawnProtectionEnabled;
+ConVar CurrentMapType;
+
+// Map types
+bool isArenaMap = false;
+bool isSkurfMap = false;
+
+bool lateLoad;
+
+public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
+{
+    CreateNative("SNT_AddPoints", Native_AddPoints);
+    lateLoad = late;
+    return APLRes_Success;
+}
 
 public void OnPluginStart()
 {
-    LoadSQLConfigs(DBConfName, sizeof(DBConfName), Prefix, sizeof(Prefix), SchemaName, sizeof(SchemaName), "Ranks", 1, StoreSchema, sizeof(StoreSchema));
+    SNT_LoadSQLConfigs(DBConfName, sizeof(DBConfName), Prefix, sizeof(Prefix), SchemaName, sizeof(SchemaName), "Ranks", 1, StoreSchema, sizeof(StoreSchema), CurrencyName, sizeof(CurrencyName), CurrencyColor, sizeof(CurrencyColor));
     LoadRankSettings();
 
     char error[255];
@@ -325,22 +89,42 @@ public void OnPluginStart()
     ck_RankDisPos = RegClientCookie("snt_rankdispos", "Does the user want to display their rank before or after thier tags / names?", CookieAccess_Public);
 
     BroadcastKillstreaks = CreateConVar("snt_broadcastks", "0", "Used to determine where to send messages. 0: All players, 1: Only killer / killed, 2: Nobody");
+    CurrentMapType = FindConVar("snt_map_type");
+
+    HookConVarChange(CurrentMapType, CVC_SetMapType);
 
     HookEvent("player_death", OnPlayerDeath);
     HookEvent("player_team", OnPlayerChangedTeam);
 
     RegAdminCmd("sm_snt_reloadrcfg",    ADM_ReloadCFG,  ADMFLAG_ROOT,     "Use this to reload the config file after you've changed it.");
     RegAdminCmd("sm_snt_rrefresh",      ADM_RefreshDB,  ADMFLAG_BAN,      "Refresh the database for every client in the server.");
-    RegAdminCmd("sm_snt_starttable",    ADM_StartTable, ADMFLAG_ROOT,     "Insert yourself as the first row of the table. REQUIRED FOR RANKS TO WORK.");
 
     RegConsoleCmd("sm_ranks", USR_OpenRankMenu);
 
     RegConsoleCmd("sm_rank", USR_OpenRankMenu);
+
+    SpawnProtectionEnabled = FindConVar("snt_sp_enabled");
+    CurrentMapType = FindConVar("snt_map_type");
+
+    if (lateLoad)
+        for (int i = 1; i < MaxClients; i++)
+            if (SNT_IsValidClient(i))
+                OnClientPostAdminCheck(i);
 }
 
-// Forwards //
+public void OnMapStart()
+{
+    PrintToServer("The current map type is: %i", CurrentMapType.IntValue);
+    CheckSeason();
+}
 
-public void OnClientPutInServer(int client)
+public void OnMapEnd()
+{
+    isSkurfMap = false;
+    isArenaMap = false;
+}
+
+public void OnClientPostAdminCheck(int client)
 {
     if (IsClientConnected(client) && !IsFakeClient(client))
     {
@@ -401,14 +185,15 @@ public void OnClientPutInServer(int client)
         Client_Info.WriteString(SteamId);
 
         char sQuery[512];
-        Format(sQuery, sizeof(sQuery), "SELECT SteamId, PlayerName, Points FROM %splayers ORDER BY Points DESC", SchemaName)
-        SQL_TQuery(DB_sntdb, SQL_GetPlayerInfo, sQuery, Client_Info)
+        Format(sQuery, sizeof(sQuery), "SELECT SteamId, PlayerName, Points FROM %splayers ORDER BY Points DESC", SchemaName);
+        SQL_TQuery(DB_sntdb, SQL_GetPlayerInfo, sQuery, Client_Info);
     }
 }
 
 public void OnClientDisconnect(int client)
 {
-    Player[client].Reset();
+    if (SNT_IsValidClient(client))
+        Player[client].Reset();
 }
 
 public void OnPlayerDeath(Event event, const char[] name, bool dontBroadcast)
@@ -417,6 +202,9 @@ public void OnPlayerDeath(Event event, const char[] name, bool dontBroadcast)
     float KillPts = PointCfg.GetKillPts();
     float AssistPts = PointCfg.GetAsstPts();
     float AssistPtsMed = PointCfg.GetAsstPtsMed();
+    int killCredits = PointCfg.GetKillCredits();
+    int asstCredits = PointCfg.GetAssistCredits();
+    int asstMedCredits = PointCfg.GetAssistMedCredits();
 
     // UserIds
     int VictimId = GetEventInt(event, "userid");
@@ -427,6 +215,30 @@ public void OnPlayerDeath(Event event, const char[] name, bool dontBroadcast)
     int victim = GetClientOfUserId(VictimId);
     int attacker = GetClientOfUserId(AttackerId);
     int assister = GetClientOfUserId(AssisterId);
+
+    // Lower amount of points and credits if it's a skill surf map. 
+    if (isSkurfMap)
+    {
+        //PrintToServer("It's a skurf map!");
+        KillPts = 2.0;
+        AssistPts = 1.0;
+        AssistPtsMed = 2.0;
+        killCredits = 1;
+        asstCredits = 1;
+        asstMedCredits = 1;
+    }
+
+    // Increase amount of points and credits if its an arena map.
+    if (isArenaMap)
+    {
+        //PrintToServer("It's an arena map!");
+        KillPts *= 2;
+        AssistPts *= 2;
+        AssistPtsMed *= 2;
+        killCredits *= 2;
+        asstCredits *= 2;
+        asstMedCredits *= 2;
+    }
 
     if (attacker != 0 && attacker != victim && victim != 0)
     {
@@ -449,12 +261,32 @@ public void OnPlayerDeath(Event event, const char[] name, bool dontBroadcast)
             // Get point multilpier.
             float Multi = Player[attacker].GetMultiplier();
 
+            // Set multiplier to 1 if skurf map.
+            if (isSkurfMap)
+                Multi = 1.0;
+
+            if (SpawnProtectionEnabled != null)
+                if (SpawnProtectionEnabled.BoolValue == false && !SNT_CheckForWeekend())
+                {
+                    KillPts = 0.5;
+                    AssistPts = 0.25;
+                    AssistPtsMed = 0.5;
+                }
+                else if (SpawnProtectionEnabled.BoolValue == false && SNT_CheckForWeekend())
+                {
+                    KillPts = 2.0;
+                    AssistPts = 1.0;
+                    AssistPtsMed = 2.0;
+                }
+
             // Add our points and multiply it by the KS bonus.
             float PtsToAdd = (KillPts) * (Multi);
+
             APts = APts + PtsToAdd;
             Player[attacker].AddPoints(PtsToAdd);
+            SNT_AddCredits(attacker, killCredits);
 
-            CPrintToChat(attacker, "%s You got %.2f points for killing {greenyellow}%s{default}!", Prefix, PtsToAdd, vname);
+            CPrintToChat(attacker, "%s You got {greenyellow}(%.2f points){default} and {unique}(%i %s){default} for killing {greenyellow}%s{default}!", Prefix, PtsToAdd, killCredits, CurrencyName, vname);
 
             // Update the player's points in the table.
             char uQuery[512];
@@ -501,16 +333,18 @@ public void OnPlayerDeath(Event event, const char[] name, bool dontBroadcast)
 
                     HandleKillstreak(victim, assister);
 
-                    Player[assister].AddPoints(AssistPtsMed);         
-                    CPrintToChat(assister, "%s You got {greenyellow}%.2f points {default}for helping kill {greenyellow}%s{default}!", Prefix, AssistPtsMed, vname);
+                    Player[assister].AddPoints(AssistPtsMed);
+                    SNT_AddCredits(assister, asstMedCredits);
+                    CPrintToChat(assister, "%s You got {greenyellow}(%.2f points){default} and {unique}(%i %s){default} for helping kill {greenyellow}%s{default}!", Prefix, AssistPtsMed, asstMedCredits, CurrencyName, vname);
                 }
                 else
                 {
                     // No, they get regular treatment.
                     SPts = SPts + AssistPts;
 
-                    Player[assister].AddPoints(AssistPts); 
-                    CPrintToChat(assister, "%s You got {greenyellow}%.2f points {default}for helping kill {greenyellow}%s{default}!", Prefix, AssistPts, vname);
+                    Player[assister].AddPoints(AssistPts);
+                    SNT_AddCredits(assister, asstCredits);
+                    CPrintToChat(assister, "%s You got {greenyellow}(%.2f points){default} and {unique}(%i %s){default} for helping kill {greenyellow}%s{default}!", Prefix, AssistPts, asstCredits, CurrencyName, vname);
                 }
                 //Update the points on the database's side.
                 Format(uQuery, sizeof(uQuery), "UPDATE %splayers SET Points=%f WHERE SteamId=\'%s\'", SchemaName, SPts, SSteamId);
@@ -547,6 +381,23 @@ public void OnPlayerChangedTeam(Event event, const char[] name, bool dontBroadca
     }
 }
 
+public void CVC_SetMapType(ConVar convar, const char[] oldValue, const char[] newValue)
+{
+    int mode = StringToInt(newValue);
+    switch (mode)
+    {
+        case 1:
+            isSkurfMap = true;
+        case 2:
+            isArenaMap = true;
+        default:
+        {
+            isSkurfMap = false;
+            isArenaMap = false;
+        }
+    }
+}
+
 public Action CP_OnChatMessage(int& author, ArrayList recipients, char[] flagstring, char[] name, char[] message, bool& processcolors, bool& removecolors)
 {
     bool IsDisplayed;
@@ -563,6 +414,12 @@ public Action CP_OnChatMessage(int& author, ArrayList recipients, char[] flagstr
 
         PointCfg.GetPlaceColor(pos, pos_color, sizeof(pos_color));
         char temp_name[512];
+
+        char nameColor[64];
+        char chatColor[64];
+        SNT_GetClientNameColor(author, nameColor, 64);
+        SNT_GetClientChatColor(author, chatColor, 64);
+
         switch (DispPos)
         {
             case 0:
@@ -570,15 +427,15 @@ public Action CP_OnChatMessage(int& author, ArrayList recipients, char[] flagstr
                 switch(pos)
                 {
                     case 0:
-                        Format(temp_name, 512, "%s[NA] %s", pos_color, name);
+                        Format(temp_name, 512, "%s[NA] %s%s%s", pos_color, nameColor, name, chatColor);
                     case 1:
-                        Format(temp_name, 512, "%s[#1] %s", pos_color, name);
+                        Format(temp_name, 512, "%s[#1] %s%s%s", pos_color, nameColor, name, chatColor);
                     case 2:
-                        Format(temp_name, 512, "%s[#2] %s", pos_color, name);
+                        Format(temp_name, 512, "%s[#2] %s%s%s", pos_color, nameColor, name, chatColor);
                     case 3:
-                        Format(temp_name, 512, "%s[#3] %s", pos_color, name);
+                        Format(temp_name, 512, "%s[#3] %s%s%s", pos_color, nameColor, name, chatColor);
                     default:
-                        Format(temp_name, 512, "%s[#%i] %s", pos_color, pos, name);
+                        Format(temp_name, 512, "%s[#%i] %s%s%s", pos_color, pos, nameColor, name, chatColor);
                 }
             }
             case 1:
@@ -586,15 +443,15 @@ public Action CP_OnChatMessage(int& author, ArrayList recipients, char[] flagstr
                 switch(pos)
                 {
                     case 0:
-                        Format(temp_name, 512, "%s %s[NA]{default}", name, pos_color);
+                        Format(temp_name, 512, "%s%s %s[NA]%s", nameColor, name, pos_color, chatColor);
                     case 1:
-                        Format(temp_name, 512, "%s %s[#1]{default}", name, pos_color);
+                        Format(temp_name, 512, "%s%s %s[#1]%s", nameColor, name, pos_color, chatColor);
                     case 2:
-                        Format(temp_name, 512, "%s %s[#2]{default}", name, pos_color);
+                        Format(temp_name, 512, "%s%s %s[#2]%s", nameColor, name, pos_color, chatColor);
                     case 3:
-                        Format(temp_name, 512, "%s %s[#3]{default}", name, pos_color);
+                        Format(temp_name, 512, "%s%s %s[#3]%s", nameColor, name, pos_color, chatColor);
                     default:
-                        Format(temp_name, 512, "%s %s[#%i]{default}", name, pos_color, pos);
+                        Format(temp_name, 512, "%s%s %s[#%i]%s", nameColor, name, pos_color, pos, chatColor);
                 }
             }
         }
@@ -604,6 +461,38 @@ public Action CP_OnChatMessage(int& author, ArrayList recipients, char[] flagstr
     }
     return Plugin_Changed;
 }
+
+public void Native_AddPoints (Handle plugin, int numParams)
+{
+    int client = GetNativeCell(1);
+    float points = GetNativeCell(2);
+
+    if (SNT_IsValidClient(client))
+    {
+        float currentPoints = Player[client].GetPoints();
+        currentPoints += points;
+
+        char steamId[64];
+        GetClientAuthId(client, AuthId_Steam3, steamId, sizeof(steamId));
+
+        Player[client].AddPoints(points);
+        
+        char uQuery[512];
+        Format(uQuery, sizeof(uQuery), "UPDATE %splayers SET Points=%f WHERE SteamId=\'%s\'", SchemaName, currentPoints, steamId);
+
+        SQL_TQuery(DB_sntdb, SQL_ErrorHandler, uQuery);
+
+        // Get player's updated rank info
+
+        DataPack clientInfo = CreateDataPack();
+        clientInfo.WriteCell(client);
+        clientInfo.WriteString(steamId);
+
+        char sQuery[512];
+        Format(sQuery, sizeof(sQuery), "SELECT * FROM %splayers ORDER BY Points DESC", SchemaName);
+        SQL_TQuery(DB_sntdb, SQL_GetPlayerRank, sQuery, clientInfo);
+    }
+} 
 
 // Custom functions
 
@@ -629,6 +518,9 @@ void LoadRankSettings()
             float KillPoints;
             float AssistPoints;
             float AssistMedPoints;
+            int killCredits;
+            int assistCredits;
+            int assistMedCredits;
 
             ConfigFile.GetString("NotPlaced", NoColor, 32);
             ConfigFile.GetString("1stColor", Color1st, 32);
@@ -640,6 +532,9 @@ void LoadRankSettings()
             KillPoints = ConfigFile.GetFloat("KillPts");
             AssistPoints = ConfigFile.GetFloat("AssistPts");
             AssistMedPoints = ConfigFile.GetFloat("AssistPtsMed");
+            killCredits = ConfigFile.GetNum("CreditsPerKill");
+            assistCredits = ConfigFile.GetNum("CreditsPerAssist");
+            assistMedCredits = ConfigFile.GetNum("CreditsPerAssistMed");
             
             PointCfg.SetPlaceColor(0, NoColor);
             PointCfg.SetPlaceColor(1, Color1st);
@@ -651,6 +546,9 @@ void LoadRankSettings()
             PointCfg.SetKillPts(KillPoints);
             PointCfg.SetAsstPts(AssistPoints);
             PointCfg.SetAsstPtsMed(AssistMedPoints);
+            PointCfg.SetKillCredits(killCredits);
+            PointCfg.SetAssistCredits(assistCredits);
+            PointCfg.SetAssistMedCredits(assistMedCredits);
         }
     }
     ConfigFile.Rewind();
@@ -674,6 +572,10 @@ void LoadRankSettings()
             float Multi2;
             float Multi3;
             float Multi4;
+            int cMulti1;
+            int cMulti2;
+            int cMulti3;
+            int cMulti4;
 
             ConfigFile.GetString("L1Name", Disp1, 32);
             ConfigFile.GetString("L2Name", Disp2, 32);
@@ -691,6 +593,10 @@ void LoadRankSettings()
             Multi2 = ConfigFile.GetFloat("L2Multip");
             Multi3 = ConfigFile.GetFloat("L3Multip");
             Multi4 = ConfigFile.GetFloat("L4Multip");
+            cMulti1 = ConfigFile.GetNum("cL1Multi");
+            cMulti2 = ConfigFile.GetNum("cL2Multi");
+            cMulti3 = ConfigFile.GetNum("cL3Multi");
+            cMulti4 = ConfigFile.GetNum("cL4Multi");
 
             KSCfg.SetLevelDisplay(1, Disp1);
             KSCfg.SetLevelDisplay(2, Disp2);
@@ -708,9 +614,45 @@ void LoadRankSettings()
             KSCfg.SetMultiplier(2, Multi2);
             KSCfg.SetMultiplier(3, Multi3);
             KSCfg.SetMultiplier(4, Multi4);
+            KSCfg.SetCreditMulti(1, cMulti1);
+            KSCfg.SetCreditMulti(2, cMulti2);
+            KSCfg.SetCreditMulti(3, cMulti3);
+            KSCfg.SetCreditMulti(4, cMulti4);
+
         }
     }
+    ConfigFile.Rewind();
+    if (ConfigFile.JumpToKey("Ranks"))
+    {
+        if (ConfigFile.JumpToKey("Dates"))
+        {
+            ConfigFile.GetString("season1_start", s1_start, sizeof(s1_start));
+            ConfigFile.GetString("season2_start", s2_start, sizeof(s2_start));
+            ConfigFile.GetString("season3_start", s3_start, sizeof(s3_start));
+            ConfigFile.GetString("season4_start", s4_start, sizeof(s4_start));
+        }
+    }
+
     ConfigFile.Close();
+}
+
+void CheckSeason()
+{
+    int timestamp = GetTime();
+    char curDate[12];
+    FormatTime(curDate, sizeof(curDate), "%m/%d", timestamp);
+
+    if (StrEqual(curDate, s1_start) || StrEqual(curDate, s2_start) || StrEqual(curDate, s3_start) || StrEqual(curDate, s4_start))
+        seasonStart = true;
+    else
+        seasonStart = false;
+
+    if (seasonStart && !pointsUpdated)
+    {
+        char uQuery[512];
+        Format(uQuery, sizeof(uQuery), "UPDATE %splayers SET Points=0", SchemaName);
+
+    }
 }
 
 int KSMessage(int victim, int attacker, char[] string)
@@ -757,8 +699,8 @@ void HandleKillstreak(int victim, int attacker)
         // Get the attacker and victim's names.
         char VName[257];
         char AName[257];
-        Player[victim].GetName(VName, sizeof(VName));
-        Player[attacker].GetName(AName, sizeof(AName));
+        GetClientName(victim, VName, 257);
+        GetClientName(attacker, AName, 257);
 
         // Get the attacker and victim's team colors for chat.
         char VTeamColor[64];
@@ -835,11 +777,42 @@ void HandleKillstreak(int victim, int attacker)
             // If the victim had more than 5 kills, broadcast the killstreak message.
             if  (Player[victim].GetKS() >= 5)
             {
+                float APts = Player[attacker].GetPoints();
+                float Multi = Player[victim].GetMultiplier();
+                float KillPts = PointCfg.GetKillPts();
+                char ASteamId[64];
+                char vname[MAX_NAME_LENGTH];
+
+                GetClientAuthId(attacker, AuthId_Steam3, ASteamId, 64);
+                GetClientName(victim, vname, MAX_NAME_LENGTH);
+
                 EmitSoundToAll("snt_sounds/ypp_sting.mp3");
                 char msg2[256];
                 // Format msg: "[SNT] Attacker ended Victim's killstreak!"
                 Format(msg2, sizeof(msg2), "%s %s%s {default}made %s%s {default}walk the plank, ending thar killstreak!", Prefix, ATeamColor, AName, VTeamColor, VName);
                 KSMessage(victim, attacker, msg2);
+
+                if (isSkurfMap)
+                {
+                    KillPts = 1.0;
+                    Multi = 1.0;
+                }
+
+                // Add our points and multiply it by the KS bonus.
+                float PtsToAdd = (KillPts * 2.0) * (Multi);
+                APts = APts + PtsToAdd;
+                Player[attacker].AddPoints(PtsToAdd);
+
+                int killCredits = PointCfg.GetKillCredits();
+                int credsToAdd = ((killCredits * 2) * Player[victim].GetCreditMulti());
+                SNT_AddCredits(attacker, credsToAdd);
+                CPrintToChat(attacker, "%s You got {greenyellow}(%.2f points){default} and %s(%i %s){default} for ending {greenyellow}%s{default}'s killstreak!", Prefix, PtsToAdd, CurrencyColor, credsToAdd, CurrencyName, vname);
+
+                // Update the player's points in the table.
+                char uQuery[512];
+                Format(uQuery, sizeof(uQuery), "UPDATE %splayers SET Points=%f WHERE SteamId=\'%s\'", SchemaName, APts, ASteamId);
+                SQL_TQuery(DB_sntdb, SQL_ErrorHandler, uQuery);
+
             }
 
 
@@ -873,11 +846,6 @@ void HandleKillstreak(int victim, int attacker)
                     Format(msg, sizeof(msg), "%s %s%s {default}is %s%s!", Prefix, ATeamColor, AName, L4Color, L4Name);
                     Player[attacker].SetMultiplier(KSCfg.GetMultiplier(4));
             }
-            else if (Player[attacker].GetKS() > Level4Kills)
-            {
-                    Format(msg, sizeof(msg), "%s %s%s {default}is still %s%s!", Prefix, ATeamColor, AName, L4Color, L4Name);
-                    Player[attacker].SetMultiplier(KSCfg.GetMultiplier(4));
-            }
             // Broadcast the message
             KSMessage(victim, attacker, msg);
         }
@@ -890,10 +858,10 @@ void BuildPlayerList(int client)
     PlayerList.SetTitle("Choose a crewmate to view:");
     SetMenuExitBackButton(PlayerList, true);
 
-    for (int i = 1; i <= GetClientCount(); i++)
+    for (int i = 1; i <= MaxClients; i++)
     {
         {
-            if (!IsFakeClient(i))
+            if (SNT_IsValidClient(i))
             {
                 char SteamId[64];
                 char PlayerName[257];
@@ -989,10 +957,10 @@ void BuildPage1Menu(int client)
 {
     Menu Page1 = new Menu(Page1_Handler, MENU_ACTIONS_DEFAULT);
     Page1.SetTitle("SNT Ranks");
-    Page1.AddItem("VYR", "View yer stats!");
-    Page1.AddItem("VPR", "View yer crewmate's stats!");
-    Page1.AddItem("TOP", "View the top 10 players!");
-    Page1.AddItem("DISP", "Toggle yer rank display!");
+    Page1.AddItem("1", "View yer stats!");
+    Page1.AddItem("2", "View yer crewmate's stats!");
+    Page1.AddItem("3", "View the top 10 players!");
+    Page1.AddItem("4", "Toggle yer rank display!");
     Page1.Display(client, 10);
 }
 
@@ -1004,6 +972,7 @@ public int PlacePanel_Handler(Menu menu, MenuAction action, int param1, int para
         {
             if (param2 == 1)
             {
+                EmitSoundToClient(param1, "buttons/button14.wav");
                 bool IsDisplayed = Player[param1].GetIfDisplayingRank();
                 Player[param1].SetDisplayingRank(!IsDisplayed);
                 if (IsDisplayed)
@@ -1023,6 +992,7 @@ public int PlacePanel_Handler(Menu menu, MenuAction action, int param1, int para
             }
             else if (param2 == 2)
             {
+                EmitSoundToClient(param1, "buttons/button14.wav");
                 int disp_pos;
                 disp_pos = Player[param1].GetRankDispPos();
 
@@ -1053,6 +1023,7 @@ public int PlacePanel_Handler(Menu menu, MenuAction action, int param1, int para
         }
         case MenuAction_Cancel:
         {
+            EmitSoundToClient(param1, "buttons/combine_button7.wav");
             CloseHandle(menu);
         }
     }
@@ -1076,24 +1047,24 @@ public int Page1_Handler(Menu menu, MenuAction action, int param1, int param2)
             char Option[6];
             GetMenuItem(menu, param2, Option, sizeof(Option));
 
-            if (StrEqual(Option, "VYR"))
+            if (StrEqual(Option, "1"))
             {
                 Client_Info.WriteCell(menu);
                 char sQuery[256];
                 Format(sQuery, sizeof(sQuery), "SELECT * FROM %splayers ORDER BY Points DESC", SchemaName)
                 SQL_TQuery(DB_sntdb, SQL_GetPlayerInfoMenu, sQuery, Client_Info);
             }
-            else if (StrEqual(Option, "VPR"))
+            else if (StrEqual(Option, "2"))
             {
                 BuildPlayerList(param1);
             }
-            else if (StrEqual(Option, "TOP"))
+            else if (StrEqual(Option, "3"))
             {
                 char sQuery[256];
                 Format(sQuery, sizeof(sQuery), "SELECT * FROM %splayers ORDER BY Points DESC LIMIT 10", SchemaName)
                 SQL_TQuery(DB_sntdb, SQL_BuildTop10, sQuery, Client_Info);
             }
-            else if (StrEqual(Option, "DISP"))
+            else if (StrEqual(Option, "4"))
             {
                 BuildRankDispMenu(param1);
             }
@@ -1347,10 +1318,6 @@ public void SQL_GetPlayerInfoMenu(Database db, DBResultSet results, const char[]
             BuildPlayerInfoMenu(client, Info_Pack);
             break;
         }
-        else
-        {
-            PrintToServer("[SNT] SQL_GetPlayerInfoMenu: Unable to find a player match.");
-        }
     }
 }
 
@@ -1419,35 +1386,6 @@ public Action ADM_RefreshDB(int client, int args)
         SQL_TQuery(DB_sntdb, SQL_GetPlayerInfo, sQuery, Client_Pack);
     }
 
-    return Plugin_Handled;
-}
-
-public Action ADM_StartTable(int client, int args)
-{
-    char SteamId[64];
-    GetClientAuthId(client, AuthId_Steam3, SteamId, 64);
-
-    char ClientName[128];
-    char ClientNameEsc[257];
-
-    GetClientName(client, ClientName, 128);
-    SQL_EscapeString(DB_sntdb, ClientName, ClientNameEsc, 257);
-
-    Player[client].SetPlayerName(ClientName);
-    Player[client].SetClientId(client);
-    Player[client].SetUserId(GetClientUserId(client));
-    Player[client].SetAuthId(SteamId);
-    Player[client].SetPoints(0.0);
-    Player[client].SetRank(0);
-    Player[client].ResetKS();
-    Player[client].SetMultiplier(1.0);
-    Player[client].SetOwnsRank(false);
-    Player[client].SetRankDispPos(1);
-
-    char iQuery[512];
-    Format(iQuery, sizeof(iQuery), "INSERT INTO %splayers (SteamId, PlayerName) VALUES (\'%s\', \'%s\')", SchemaName, SteamId, ClientNameEsc);
-
-    SQL_TQuery(DB_sntdb, SQL_ErrorHandler, iQuery);
     return Plugin_Handled;
 }
 

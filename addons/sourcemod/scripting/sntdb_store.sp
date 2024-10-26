@@ -11,12 +11,12 @@
 // third party includes
 #include <morecolors>
 #include <chat-processor>
-#include <sntdb_sound>
-#include <sntdb_tags>
-#include <sntdb_trails>
+#include <sntdb/sound>
+#include <sntdb/tags>
+#include <sntdb/trails>
 
 #define REQUIRED_PLUGIN
-#include <sntdb_core>
+#include <sntdb/core>
 
 public Plugin myinfo =
 {
@@ -169,13 +169,19 @@ enum struct ItemChoice
     }
 }
 
+bool lateLoad;
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
 {
 
-    CreateNative("OpenStoreMenu", BuildPage1Store_Native);
-    CreateNative("OpenInventoryMenu", BuildPage1Inventory_Native);
+    CreateNative("SNT_OpenStoreMenu", BuildPage1Store_Native);
+    CreateNative("SNT_OpenInventoryMenu", BuildPage1Inventory_Native);
+    CreateNative("SNT_GetClientNameColor",  SendClientNameColor_Native);
+    CreateNative("SNT_GetClientChatColor", SendClientChatColor_Native);
+    CreateNative("SNT_AddCredits", AddCredits_Native);
     RegPluginLibrary("sntdb_store");
+
+    lateLoad = late;
 
     return APLRes_Success;
 }
@@ -205,11 +211,11 @@ Cookie ck_TagPosition;
 SNT_ClientInfo Player[MAXPLAYERS + 1];
 ItemChoice TempChoice[MAXPLAYERS + 1];
 TagSettings PlayerTags[MAXPLAYERS + 1];
-TrailInfo Trails[16];
+TrailInfo Trails[128];
 
 public void OnPluginStart()
 {
-    LoadSQLStoreConfigs(DBConfName, 64, Prefix, 96, StoreSchema, 64, "Main", CurrencyName, 64, CurrencyColor, 64, CFG_CreditsToGive, MinsTilCredits);
+    SNT_LoadSQLStoreConfigs(DBConfName, 64, Prefix, 96, StoreSchema, 64, "Main", CurrencyName, 64, CurrencyColor, 64, CFG_CreditsToGive, MinsTilCredits);
     LoadTranslations("common.phrases");
 
     PrintToServer("[SNT] Connecting to Database");
@@ -233,6 +239,7 @@ public void OnPluginStart()
 
     // user commands
     RegConsoleCmd("sm_store", USR_OpenStore, "Use this to open the store menu!");
+    RegConsoleCmd("sm_shop", USR_OpenStore, "Use this to open the store menu!");
     RegConsoleCmd("sm_tavern", USR_OpenStore, "Use this to open the store menu!")
     RegConsoleCmd("sm_inventory", USR_OpenInv, "Use this to open the inventory menu!");
     RegConsoleCmd("sm_inv", USR_OpenInv, "Use this to open the inventory menu!");
@@ -240,15 +247,32 @@ public void OnPluginStart()
     RegConsoleCmd("sm_color", USR_OpenColorMenu, "Use this to preview all of the different colors we have!");
     RegConsoleCmd("sm_colors", USR_OpenColorMenu, "Use this to preview all of the different colors we have!");
     RegConsoleCmd("sm_equip", USR_OpenEquipCatMenu, "Use this to quickly access all equip menus!");
+    RegConsoleCmd("sm_credits", USR_DisplayCredits, "Use this to show how many credits you have!");
+
+    char creditCMD[32];
+    Format(creditCMD, sizeof(creditCMD), "sm_%s", CurrencyName);
+    RegConsoleCmd(creditCMD, USR_DisplayCredits, "Use this to show how many credits you have!");
+
     // admin commands
     RegAdminCmd("sm_reloadstore_cfg", ADM_ReloadCfgs, ADMFLAG_ROOT, "/reloadstore_cfg Use this to reload the main config for the store");
     RegAdminCmd("sm_addcredits", ADM_AddCredits, ADMFLAG_UNBAN, "/addcredits <player> <amount> Use this to give credits to a player.");
     RegAdminCmd("sm_rmvcredits", ADM_RmvCredits, ADMFLAG_UNBAN, "/rmvcredits <player> <amount> Use this to take away credits from a player.");
+
+    if (lateLoad)
+    {
+        for (int i = 1; i < MaxClients; i++)
+        {
+            if (SNT_IsValidClient(i))
+                OnClientPostAdminCheck(i);
+
+            OnMapStart();
+        }
+    }
 }
 
-public void OnClientPutInServer(int client)
+public void OnClientPostAdminCheck(int client)
 {
-    if (IsClientConnected(client) && !IsFakeClient(client))
+    if (ValidateClient(client))
     {
         if (AreClientCookiesCached(client))
         {
@@ -279,17 +303,20 @@ public void OnClientPutInServer(int client)
         Format(sQuery2, 512, "SELECT ItemId FROM %sInventories WHERE SteamId=\'%s\'", StoreSchema, SteamId);
         SQL_TQuery(DB_sntdb, SQL_CheckForColorItems, sQuery2, client);
 
-        DataPack Timer_Info = CreateDataPack();
-        CreditTimer[client] = CreateDataTimer((MinsTilCredits*60), Timer_AddCredits, Timer_Info, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
-        Timer_Info.WriteCell(client);
+        CreditTimer[client] = CreateTimer((MinsTilCredits*60.0), Timer_AddCredits, client, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
+        
     }
 }
 
 public void OnClientDisconnect(int client)
 {
-    TempChoice[client].Reset();
-    Player[client].Reset();
-    CloseHandle(CreditTimer[client]);
+    if (SNT_IsValidClient(client))
+    {
+        TempChoice[client].Reset();
+        Player[client].Reset();
+        if (CreditTimer[client] != INVALID_HANDLE)
+            CloseHandle(CreditTimer[client]);
+    }
 }
 
 public void OnMapStart()
@@ -305,35 +332,13 @@ public void OnMapStart()
     PrecacheSound("mvm/mvm_money_pickup.wav", true);
 }
 
-public Action OnPlayerRunCmd(int client)
+bool ValidateClient(int client)
 {
-    if (IsPlayerAlive(client) && TempChoice[client].GetPreviewingTrail())
-    {
-        if (RenderFrame[client] != 4)
-        {
-            RenderFrame[client]++;
-            return Plugin_Continue;
-        }
-        float last_pos[3];
-        TempChoice[client].GetLastPosition(last_pos);
-
-        float player_origin[3];
-        GetClientAbsOrigin(client, player_origin);
-
-        player_origin[2] += 8.0;
-
-        int PreviewColor[4] = {255, 255, 255, 150};
-        TE_SetupBeamPoints(player_origin, last_pos, TempChoice[client].GetTrailIndex(), 0, 0, 0, 5.0, 8.0, 8.0, 2, 0.0, PreviewColor, 0);
-        TempChoice[client].SetLastPosition(player_origin);
-
-        int receiver[1];
-        receiver[0] = client;
-        TE_Send(receiver, 1);
-        RenderFrame[client] = 0;
-    }
-    return Plugin_Continue;
+    if (IsClientConnected(client) && IsClientInGame(client) && !IsFakeClient(client))
+        return true;
+    else
+        return false;
 }
-
 
 void GetCookies(int client)
 {
@@ -471,7 +476,7 @@ void BuildPage1Store(int client)
     StoreMainPanel.Send(client, Store_Page1Handler, 10);
 }
 
-void BuildPage1Store_Native(Handle plugin, int numParams)
+public void BuildPage1Store_Native(Handle plugin, int numParams)
 {
     int client = GetNativeCell(1);
 
@@ -535,7 +540,7 @@ void BuildPage1Inventory(int client)
     InvMainPanel.Send(client, Inv_Page1Handler, 10);
 }
 
-void BuildPage1Inventory_Native(Handle plugin, int numParams)
+public void BuildPage1Inventory_Native(Handle plugin, int numParams)
 {
     int client = GetNativeCell(1);
 
@@ -565,6 +570,46 @@ void BuildPage1Inventory_Native(Handle plugin, int numParams)
     InvMainPanel.DrawItem("The Tavern");
     InvMainPanel.DrawItem("Exit");
     InvMainPanel.Send(client, Inv_Page1Handler, 10);
+}
+
+public void SendClientNameColor_Native(Handle plugin, int numParams)
+{
+    int client = GetNativeCell(1);
+    char nameColor[64];
+    Player[client].GetNameColor(nameColor, 64);
+
+    SetNativeString(2, nameColor, GetNativeCell(3));
+}
+
+public void SendClientChatColor_Native(Handle plugin, int numParams)
+{
+    int client = GetNativeCell(1);
+    char chatColor[64];
+    Player[client].GetTextColor(chatColor, 64);
+    
+    SetNativeString(2, chatColor, GetNativeCell(3));
+}
+
+public void AddCredits_Native(Handle plugin, int numParams)
+{
+    int client = GetNativeCell(1);
+    char sSteamId[64];
+    if (GetClientAuthId(client, AuthId_Steam3, sSteamId, sizeof(sSteamId)))
+    {
+        char sQuery[512];
+        int iCurCredits = Player[client].GetCredits();
+        int iPayout = GetNativeCell(2);
+
+        iCurCredits = (iCurCredits + iPayout);
+        Player[client].SetCredits(iCurCredits);
+        Format(sQuery, sizeof(sQuery), "UPDATE %splayers "
+                                    ..."SET Credits=\"%i\" "
+                                    ..."WHERE SteamId=\"%s\";", StoreSchema, iCurCredits, sSteamId);
+        
+        SQL_TQuery(DB_sntdb, SQL_ErrorHandler, sQuery);
+    }
+    else
+        LogError("** AddCredits_Native ** Could not get client AuthId");
 }
 
 // void BuildTop10sPage(int client)
@@ -723,7 +768,7 @@ public int ItemInfo_Handler(Menu menu, MenuAction action, int param1, int param2
                 }
                 case 3:
                 {
-                    Format(sQuery, 512, "SELECT ItemId, TrailName, Price, ModelIndex FROM %strails WHERE Owner=\'STORE\' AND LEFT(ItemId, 4)=\'trl_\' ORDER BY Price ASC", StoreSchema);
+                    Format(sQuery, 512, "SELECT ItemId, TrailName, Price FROM %strails WHERE Owner=\'STORE\' AND LEFT(ItemId, 4)=\'trl_\' ORDER BY Price ASC", StoreSchema);
                     TempChoice[param1].SetItemId(ChosenOption);
                     TempChoice[param1].SetItemType(3);
                 }
@@ -778,7 +823,7 @@ public int InvItems_Handler(Menu menu, MenuAction action, int param1, int param2
                 }
                 case 3:
                 {
-                    Format(sQuery, 512, "SELECT ItemId, TrailName, ModelIndex FROM %sInventories WHERE SteamId=\'%s\' AND LEFT(ItemId, 4)=\'trl_\'", StoreSchema, SteamId);
+                    Format(sQuery, 512, "SELECT ItemId, TrailName FROM %sInventories WHERE SteamId=\'%s\' AND LEFT(ItemId, 4)=\'trl_\'", StoreSchema, SteamId);
                     TempChoice[param1].SetItemId(ChosenOption);
                     TempChoice[param1].SetItemType(3);
                 }
@@ -1048,7 +1093,7 @@ public int InvInfoPanel_Handler(Menu menu, MenuAction action, int param1, int pa
                             menu.DisplayAt(param1, GetMenuSelectionPosition(), 0);
                         }
                         case 2:
-                            OpenTagMenu(param1);
+                            SNT_OpenTagMenu(param1);
                         case 3:
                             BuildPage1Inventory(param1);
                         case 4:
@@ -1075,7 +1120,7 @@ public int InvInfoPanel_Handler(Menu menu, MenuAction action, int param1, int pa
                             menu.DisplayAt(param1, GetMenuSelectionPosition(), 0);
                         }
                         case 2:
-                            OpenSoundMenu(param1);
+                            SNT_OpenSoundMenu(param1);
                         case 3:
                             BuildPage1Inventory(param1);
                         case 4:
@@ -1088,7 +1133,7 @@ public int InvInfoPanel_Handler(Menu menu, MenuAction action, int param1, int pa
                     switch (param2)
                     {
                         case 1:
-                            OpenTrailMenu(param1);
+                            SNT_OpenTrailMenu(param1);
                         case 2:
                             BuildPage1Inventory(param1);
                         case 3:
@@ -1188,17 +1233,17 @@ public int ECatMenu_Handler(Menu menu, MenuAction action, int param1, int param2
                 case 1:
                 {
                     EmitSoundToClient(param1, "buttons/button14.wav");
-                    OpenTagEquip(param1);
+                    SNT_OpenTagEquip(param1);
                 }
                 case 2:
                 {
                     EmitSoundToClient(param1, "buttons/button14.wav");
-                    OpenSoundEquip(param1);
+                    SNT_OpenSoundEquip(param1);
                 }
                 case 3:
                 {
                     EmitSoundToClient(param1, "buttons/button14.wav");
-                    OpenTrailEquip(param1);
+                    SNT_OpenTrailEquip(param1);
                 }
                 case 4:
                 {
@@ -1249,13 +1294,8 @@ public int ECatMenu_Handler(Menu menu, MenuAction action, int param1, int param2
     return 0;
 }
 
-public Action Timer_AddCredits(Handle timer, DataPack pack)
+public Action Timer_AddCredits(Handle timer, any client)
 {
-    pack.Reset();
-    int client = pack.ReadCell();
-
-    EmitGameSoundToClient(client, "mvm/mvm_money_pickup.wav");
-
     char SteamId[64];
     Player[client].GetAuthId(SteamId, 64);
     int DoubleCreditsEnabled = GetConVarInt(isDoubleCredits);
@@ -1315,7 +1355,7 @@ public void SQL_ErrorHandler(Database db, DBResultSet results, const char[] erro
 
     if (!StrEqual(error, ""))
     {
-        PrintToServer("[SNT] ERROR IN QUERY! %s", error);
+        PrintToServer("[SNT] SQL_ErrorHandler: %s", error);
     }
 }
 
@@ -1324,12 +1364,15 @@ public void SQL_GetPlayerInfo(Database db, DBResultSet results, const char[] err
     if (db == null)
     {
         PrintToServer("[SNT] DATABASE IS NULL!");
+        return;
     }
 
     if (!StrEqual(error, ""))
     {
-        PrintToServer("[SNT] ERROR IN SHOWING ITEM INFO: %s", error);
+        PrintToServer("[SNT] ERROR IN SQL_GetPlayerInfo: %s", error);
+        return;
     }
+
     int client;
     int uid;
     char SteamId[64];
@@ -1374,6 +1417,18 @@ public void SQL_GetPlayerInfo(Database db, DBResultSet results, const char[] err
 
 public void SQL_CheckForColorItems(Database db, DBResultSet results, const char[] error, any data)
 {
+    if (db == null)
+    {
+        PrintToServer("[SNT] DATABASE IS NULL!");
+        return;
+    }
+
+    if (!StrEqual(error, ""))
+    {
+        PrintToServer("[SNT] ERROR IN SQL_CheckForColorItems: %s", error);
+        return;
+    }
+
     while (SQL_FetchRow(results))
     {
         char SQL_ItemId[64];
@@ -1398,11 +1453,13 @@ public void SQL_CacheFiles(Database db, DBResultSet results, const char[] error,
     if (db == null)
     {
         PrintToServer("[SNT] DATABASE IS NULL!");
+        return;
     }
 
     if (!StrEqual(error, ""))
     {
-        PrintToServer("[SNT] ERROR IN SHOWING ITEM INFO: %s", error);
+        PrintToServer("[SNT] ERROR IN SQL_CacheFiles: %s", error);
+        return;
     }
 
     int row;
@@ -1452,11 +1509,13 @@ public void SQL_ShowItemInfo(Database db, DBResultSet results, const char[] erro
     if (db == null)
     {
         PrintToServer("[SNT] DATABASE IS NULL!");
+        return;
     }
 
     if (!StrEqual(error, ""))
     {
-        PrintToServer("[SNT] ERROR IN SHOWING ITEM INFO: %s", error);
+        PrintToServer("[SNT] ERROR IN SQL_ShowItemInfo: %s", error);
+        return;
     }
 
     int client;
@@ -1534,7 +1593,6 @@ public void SQL_ShowItemInfo(Database db, DBResultSet results, const char[] erro
             }
             else if (StrContains(ItemToShow, "trl_") != -1)
             {
-                TempChoice[client].TrailIndex = SQL_FetchInt(results, 3);
                 TempChoice[client].SetItemId(SQL_ItemId);
                 TempChoice[client].SetItemName(SQL_ItemName);
                 TempChoice[client].Price = SQL_Price;
@@ -1587,11 +1645,13 @@ public void SQL_ShowItemInfo_Inv(Database db, DBResultSet results, const char[] 
     if (db == null)
     {
         PrintToServer("[SNT] DATABASE IS NULL!");
+        return;
     }
 
     if (!StrEqual(error, ""))
     {
-        PrintToServer("[SNT] ERROR IN SHOWING ITEM INFO: %s", error);
+        PrintToServer("[SNT] ERROR IN SQL_ShowItemInfo_Inv: %s", error);
+        return;
     }
 
     int client;
@@ -1703,11 +1763,13 @@ public void SQL_BuyItem(Database db, DBResultSet results, const char[] error, an
     if (db == null)
     {
         PrintToServer("[SNT] DATABASE IS NULL!");
+        return;
     }
 
     if (!StrEqual(error, ""))
     {
-        PrintToServer("[SNT] ERROR IN SHOWING ITEM INFO: %s", error);
+        PrintToServer("[SNT] ERROR IN SQL_BuyItem: %s", error);
+        return;
     }
     int client;
     char ItemToBuy[64];
@@ -1747,6 +1809,7 @@ public void SQL_BuyItem(Database db, DBResultSet results, const char[] error, an
                     char sQuery[512];
                     Format(sQuery, 512, "SELECT ItemId FROM %sInventories WHERE SteamId=\'%s\'", StoreSchema, SteamId);
                     SQL_TQuery(DB_sntdb, SQL_IsItemAlreadyOwned, sQuery, ItemInfo);
+                    
                     break;
                 }
             }
@@ -1757,16 +1820,30 @@ public void SQL_BuyItem(Database db, DBResultSet results, const char[] error, an
 
 public void SQL_IsItemAlreadyOwned(Database db, DBResultSet results, const char[] error, any data)
 {
+    if (db == null)
+    {
+        PrintToServer("[SNT] DATABASE IS NULL!");
+        return;
+    }
+
+    if (!StrEqual(error, ""))
+    {
+        PrintToServer("[SNT] ERROR IN SQL_IsItemAlreadyOwned: %s", error);
+        return;
+    }
+
+
     char ItemId[64];
     char ItemName[64];
+    char SteamId[64];
+    int client;
+    int Price
 
     ResetPack(data)
-    int client = ReadPackCell(data);
+    client = ReadPackCell(data);
     ReadPackString(data, ItemId, 64);
     ReadPackString(data, ItemName, 64);
-    int Price = ReadPackCell(data);
-
-    char SteamId[64];
+    Price = ReadPackCell(data);
     GetClientAuthId(client, AuthId_Steam3, SteamId, 64);
 
     while (SQL_FetchRow(results))
@@ -1780,7 +1857,8 @@ public void SQL_IsItemAlreadyOwned(Database db, DBResultSet results, const char[
             CPrintToChat(client, "{fullred}Ye already own that item! Check yer {greenyellow}/treasure {fullred}for more info!");
             break;
         }
-        else if (!StrEqual(SQL_ItemId, ItemId) && !SQL_MoreRows(results))
+        
+        if (!StrEqual(SQL_ItemId, ItemId) && !SQL_MoreRows(results))
         {
             Player[client].RemoveCredits(Price);
 
@@ -1790,6 +1868,7 @@ public void SQL_IsItemAlreadyOwned(Database db, DBResultSet results, const char[
             char uQuery[512];
             Format(iQuery, 512, "INSERT INTO %splayeritems (SteamId, ItemId) VALUES (\'%s\', \'%s\')", StoreSchema, SteamId, ItemId);
             Format(uQuery, 512, "UPDATE %splayers SET Credits=%i WHERE SteamId=\'%s\'", StoreSchema, ClientCreds, SteamId);
+
             SQL_TQuery(DB_sntdb, SQL_ErrorHandler, iQuery);
             SQL_TQuery(DB_sntdb, SQL_ErrorHandler, uQuery);
 
@@ -1803,12 +1882,15 @@ public void SQL_FillItemMenu(Database db, DBResultSet results, const char[] erro
     if (db == null)
     {
         PrintToServer("[SNT] DATABASE IS NULL!");
+        return;
     }
 
     if (!StrEqual(error, ""))
     {
-        PrintToServer("[SNT] ERROR IN SHOWING ITEM INFO: %s", error);
+        PrintToServer("[SNT] ERROR IN SQL_FillItemMenu: %s", error);
+        return;
     }
+
     int client;
     int module;
     ResetPack(data);
@@ -1860,12 +1942,15 @@ public void SQL_FillInvMenu(Database db, DBResultSet results, const char[] error
     if (db == null)
     {
         PrintToServer("[SNT] DATABASE IS NULL!");
+        return;
     }
 
     if (!StrEqual(error, ""))
     {
-        PrintToServer("[SNT] ERROR IN SHOWING ITEM INFO: %s", error);
+        PrintToServer("[SNT] ERROR IN SQL_FillInvMenu: %s", error);
+        return;
     }
+
     int client;
     int module;
 
@@ -1933,6 +2018,15 @@ public void SQL_FillInvMenu(Database db, DBResultSet results, const char[] error
     InvMenu.Display(client, MENU_TIME_FOREVER);
 }
 
+public Action USR_DisplayCredits(int client, int args)
+{
+    if (client == 0)
+        return Plugin_Handled;
+
+    int credits = Player[client].GetCredits();
+    CPrintToChat(client, "%s Ye've got [%s%i %s{default}] in yer coffers!", Prefix, CurrencyColor, credits, CurrencyName);
+    return Plugin_Handled;
+}
 
 public Action USR_OpenStore(int client, int args)
 {
@@ -2075,7 +2169,7 @@ public Action ADM_RmvCredits (int client, int args)
 
 public Action ADM_ReloadCfgs (int client, int args)
 {
-    LoadSQLStoreConfigs(DBConfName, 64, Prefix, 96, StoreSchema, 64, "Main", CurrencyName, 64, CurrencyColor, 64, CFG_CreditsToGive, MinsTilCredits);
+    SNT_LoadSQLStoreConfigs(DBConfName, 64, Prefix, 96, StoreSchema, 64, "Main", CurrencyName, 64, CurrencyColor, 64, CFG_CreditsToGive, MinsTilCredits);
 
     DB_sntdb.Close();
 
@@ -2117,6 +2211,13 @@ public Action ADM_StartTable(int client, int args)
 
 public Action USR_OpenEquipCatMenu(int client, int args)
 {
+    char SteamId[64];
+    GetClientAuthId(client, AuthId_Steam3, SteamId, 64);
+
+    char sQuery[512];
+    Format(sQuery, 512, "SELECT ItemId FROM %sInventories WHERE SteamId=\'%s\'", StoreSchema, SteamId);
+    SQL_TQuery(DB_sntdb, SQL_CheckForColorItems, sQuery, client);
+
     Panel ECatMenu = CreatePanel();
     ECatMenu.SetTitle("Select a category!");
     ECatMenu.DrawItem("Tag");
@@ -2232,7 +2333,7 @@ public Action CP_OnChatMessage(int& author, ArrayList recipients, char[] flagstr
     PlayerTags[author].GetTagDisplay(TagDisplay, 64);
     PlayerTags[author].GetTagColor(TagColor, 64);
 
-    if (PlayerTags[author].GetShowingTag())
+    if (SNT_GetPlayerTagBool(author))
     {
         if (!StrEqual(TagDisplay, "NONE") && !StrEqual(TagColor, "NONE"))
         {
@@ -2259,13 +2360,6 @@ public int ColorPage1_Handler(Menu menu, MenuAction action, int param1, int para
     {
         case MenuAction_Select:
         {
-            char SteamId[64];
-            GetClientAuthId(param1, AuthId_Steam3, SteamId, 64);
-
-            char sQuery[512];
-            Format(sQuery, 512, "SELECT ItemId FROM %sInventories WHERE SteamId=\'%s\'", StoreSchema, SteamId);
-            SQL_TQuery(DB_sntdb, SQL_CheckForColorItems, sQuery, param1);
-
             char Option[6];
             GetMenuItem(menu, param2, Option, 6);
 
@@ -2364,7 +2458,7 @@ public int ColorPage2_Handler(Menu menu, MenuAction action, int param1, int para
                 if (!Player[param1].GetOwnsNameColor())
                 {
                     EmitSoundToClient(param1, "snt_sounds/ypp_sting.mp3");
-                    CPrintToChat(param1, "{fullred}Ye have ta buy chat colors from the tavern first!\n{default}Use {greenyellow}/tavern {default}to see their wares!", Prefix);
+                    CPrintToChat(param1, "{fullred}Ye have ta buy name colors from the tavern first!\n{default}Use {greenyellow}/tavern {default}to see their wares!", Prefix);
                     return 0;
                 }
                 switch (StringToInt(SplitOption[1]))
@@ -2668,6 +2762,13 @@ public Action USR_OpenColorMenu (int client, int args)
         return Plugin_Handled;
     }
     
+    char SteamId[64];
+    GetClientAuthId(client, AuthId_Steam3, SteamId, 64);
+
+    char sQuery[512];
+    Format(sQuery, 512, "SELECT ItemId FROM %sInventories WHERE SteamId=\'%s\'", StoreSchema, SteamId);
+    SQL_TQuery(DB_sntdb, SQL_CheckForColorItems, sQuery, client);
+
     Color_SendPage1(client);
     return Plugin_Handled;
 }

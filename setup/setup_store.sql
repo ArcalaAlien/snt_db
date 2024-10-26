@@ -13,8 +13,8 @@ DROP TABLE IF EXISTS storeplayers;
 
 CREATE TABLE storeplayers (
     SteamId     varchar(64),
-    PlayerName  varchar(64)     NOT NULL,
-    Credits     int             DEFAULT 750,
+    PlayerName  varchar(256)    CHARACTER SET UTF8MB4 NOT NULL,
+    Credits     int             NOT NULL DEFAULT 750,
     PRIMARY KEY (SteamId)
 );
 
@@ -47,7 +47,6 @@ CREATE TABLE storetrails (
     TrailName       varchar(64)         NOT NULL,
     TextureVTF      varchar(260)        NOT NULL,
     TextureVMT      varchar(260)        NOT NULL,
-    ModelIndex      int                 DEFAULT -1 NOT NULL,
     Owner           varchar(64)         DEFAULT "STORE" NOT NULL,
     Price           int                 DEFAULT 0,
     PRIMARY KEY (ItemId)
@@ -89,9 +88,14 @@ CREATE TABLE storeplayeritems (
 );
 
 -- VIEWS --
+DROP VIEW IF EXISTS storeInventories;
+DROP VIEW IF EXISTS storeTopItems;
+DROP VIEW IF EXISTS storeTopTags;
+DROP VIEW IF EXISTS storeTopSounds;
+DROP VIEW IF EXISTS storeTopTrails;
 
-CREATE OR REPLACE VIEW storeInventories AS
-SELECT P.SteamId, PI.ItemId, P.PlayerName, TA.TagName, TA.DisplayName, TA.DisplayColor, S.SoundName, S.SoundFile, S.Cooldown, TR.TrailName, TR.ModelIndex, SI.ItemName, SI.ItemDesc
+CREATE VIEW storeInventories AS
+SELECT P.SteamId, PI.ItemId, P.PlayerName, TA.TagName, TA.DisplayName, TA.DisplayColor, S.SoundName, S.SoundFile, S.Cooldown, TR.TrailName, SI.ItemName, SI.ItemDesc
 FROM storeplayers P
     JOIN storeplayeritems PI
         ON P.SteamId = PI.SteamId
@@ -104,7 +108,7 @@ FROM storeplayers P
             LEFT JOIN storeserveritems SI
                 ON PI.ItemId = SI.ItemId;
 
-CREATE OR REPLACE VIEW storeTopItems AS
+CREATE VIEW storeTopItems AS
 SELECT ItemId, DisplayName, SoundName, TrailName, ItemName, SUM(Buyers) TotalPurchased
 FROM ( 
     SELECT PL.ItemId, TA.DisplayName, S.SoundName, TR.TrailName, SI.ItemName, COUNT(DISTINCT PL.SteamId) Buyers
@@ -121,7 +125,7 @@ FROM (
 ) AS ItemCount
 GROUP BY ItemId, DisplayName, SoundName, TrailName, ItemName;
 
-CREATE OR REPLACE VIEW storeTopTags AS
+CREATE VIEW storeTopTags AS
 SELECT ItemId, SUM(Buyers) TotalPurchased
 FROM ( 
     SELECT PL.ItemId, TA.DisplayName, COUNT(DISTINCT PL.SteamId) Buyers
@@ -132,7 +136,7 @@ FROM (
 ) AS TagCount
 GROUP BY ItemId, DisplayName;
 
-CREATE OR REPLACE VIEW storeTopSounds AS
+CREATE VIEW storeTopSounds AS
 SELECT ItemId, SoundName, SUM(Buyers) TotalPurchased
 FROM ( 
     SELECT PL.ItemId, S.SoundName, COUNT(DISTINCT PL.SteamId) Buyers
@@ -143,7 +147,7 @@ FROM (
 ) AS SoundCount
 GROUP BY ItemId, SoundName;
 
-CREATE OR REPLACE VIEW storeTopTrails AS
+CREATE VIEW storeTopTrails AS
 SELECT ItemId, TrailName, SUM(Buyers) TotalPurchased
 FROM ( 
     SELECT PL.ItemId, TR.TrailName, COUNT(DISTINCT PL.SteamId) Buyers
@@ -167,42 +171,44 @@ delimiter $$
 CREATE TRIGGER storeGivePlayerDefaults AFTER INSERT ON storeplayers FOR EACH ROW
 BEGIN 
 	INSERT INTO storeplayergroups VALUES (NEW.SteamId, 1);
-    INSERT INTO storeplayeritems (SteamId, ItemId) VALUES (NEW.SteamId, "tag_news", 0), (NEW.SteamId, "tag_bgns", 0), (NEW.SteamId, "tag_ints", 0), (NEW.SteamId, "tag_exps", 0), (NEW.SteamId, "tag_msts", 0), (NEW.SteamId, "tag_pirt", 0), (NEW.SteamId, "clr_srcm", 0), (NEW.SteamId, "snd_yarr", 0), (NEW.SteamId, "trl_pflg", 0);
+    INSERT INTO storeplayeritems (SteamId, ItemId) VALUES (NEW.SteamId, "tag_news"), (NEW.SteamId, "tag_bgns"), (NEW.SteamId, "tag_ints"), (NEW.SteamId, "tag_exps"), (NEW.SteamId, "tag_msts"), (NEW.SteamId, "tag_pirt"), (NEW.SteamId, "clr_srcm"), (NEW.SteamId, "snd_yarr"), (NEW.SteamId, "trl_pflg") ON DUPLICATE KEY UPDATE SteamId=NEW.SteamId;
 END$$
 
 CREATE TRIGGER storeGiveItemsForSupporters AFTER INSERT ON storeplayergroups FOR EACH ROW
 BEGIN
     IF (NEW.GroupNum = 2) THEN
-        INSERT INTO storeplayeritems (SteamId, ItemId) VALUES (NEW.SteamId, "tag_erly", 0), (NEW.SteamId, "tag_hist", 0), (NEW.SteamId, "tag_frst", 0), (NEW.SteamId, "srv_rank", 0), (NEW.SteamId, "srv_mspm", 0);
+        INSERT INTO storeplayeritems (SteamId, ItemId) VALUES (NEW.SteamId, "tag_erly"), (NEW.SteamId, "tag_hist"), (NEW.SteamId, "tag_frst"), (NEW.SteamId, "srv_rank"), (NEW.SteamId, "srv_mspm") ON DUPLICATE KEY UPDATE SteamId=NEW.SteamId;
 	END IF;
 END$$
 
 CREATE TRIGGER storeGiveItemsForContributors AFTER INSERT ON storeplayergroups FOR EACH ROW
 BEGIN
     IF (NEW.GroupNum = 3) THEN
-			INSERT INTO storeplayeritems (SteamId, ItemId) VALUES (NEW.SteamId, "tag_erly", 0), (NEW.SteamId, "tag_hist", 0), (NEW.SteamId, "tag_frst", 0), (NEW.SteamId, "srv_rank", 0), (NEW.SteamId, "srv_mspm", 0);
+			INSERT INTO storeplayeritems (SteamId, ItemId) VALUES (NEW.SteamId, "tag_cont"), (NEW.SteamId, "tag_desg"), (NEW.SteamId, "tag_mapr"), (NEW.SteamId, "srv_hlpr"), (NEW.SteamId, "srv_mspm") ON DUPLICATE KEY UPDATE SteamId=NEW.SteamId;
 	END IF;
 END$$
 
 CREATE TRIGGER storeGiveItemsForDonators AFTER INSERT ON storeplayergroups FOR EACH ROW
 BEGIN
     IF (NEW.GroupNum = 4) THEN
-			INSERT INTO storeplayeritems VALUES (NEW.SteamId, "tag_vip", 1), (NEW.SteamId, "tag_dnte", 1), (NEW.SteamId, "tag_rich", 1), (NEW.SteamId, "srv_mpsm", 1), (NEW.SteamId, "srv_rank", 1), (NEW.SteamId, "srv_cnme", 1), (NEW.SteamId, "srv_ccht", 1);
+			INSERT INTO storeplayeritems VALUES (NEW.SteamId, "tag_vip", 1), (NEW.SteamId, "tag_dnte", 1), (NEW.SteamId, "tag_rich", 1), (NEW.SteamId, "srv_mpsm", 1), (NEW.SteamId, "srv_rank", 1), (NEW.SteamId, "srv_cnme", 1), (NEW.SteamId, "srv_ccht", 1) ON DUPLICATE KEY UPDATE SteamId=NEW.SteamId;
 	END IF;
 END$$
 
 CREATE TRIGGER storeGiveServerSoundItems AFTER INSERT ON storeplayeritems FOR EACH ROW
 BEGIN
-    IF (NEW.ItemId = 'srv_ssnd') THEN
+    IF (NEW.ItemId <> "srv_ssnd") THEN
             INSERT INTO storeplayeritems VALUES (NEW.SteamId, "snd_srv_sting", 0), (NEW.SteamId, 'snd_srv_login', 0), (NEW.SteamId, 'snd_mspam_warn1', 0), (NEW.SteamId, 'snd_mspam_warn2', 0);
     END IF;
 END$$
 
 CREATE TRIGGER storeRemoveServerSoundItems BEFORE DELETE ON storeplayeritems FOR EACH ROW
 BEGIN
-    IF (OLD.ItemId = 'srv_ssnd') THEN
+    IF (OLD.ItemId = "srv_ssnd") THEN
             DELETE FROM storeplayeritems WHERE SteamId=OLD.SteamId AND ItemId='snd_srv_sting';
-            DELETE FROM storeplayeritems WHERE SteamId=OLD.SteamId and ItemId='snd_srv_login';
+            DELETE FROM storeplayeritems WHERE SteamId=OLD.SteamId AND ItemId='snd_srv_login';
+            DELETE FROM storeplayeritems WHERE SteamId=OLD.SteamId AND ItemId='snd_mspam_warn1';
+            DELETE FROM storeplayeritems WHERE SteamId=OLD.SteamId AND ItemId='snd_mspam_warn2';
     END IF;
 END$$
 

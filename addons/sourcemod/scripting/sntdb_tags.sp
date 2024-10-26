@@ -4,81 +4,11 @@
 #include <clientprefs>
 #include <chat-processor>
 #include <morecolors>
-#include <sntdb_store>
+#include <sntdb/store>
+#include <sntdb/tags>
 
 #define REQUIRED_PLUGIN
-#include <sntdb_core>
-
-
-enum struct TagSettings
-{
-    bool IsTagDisplayed;
-    char TagId[64];
-    char TagName[64];
-    char TagDisplay[64];
-    char TagColor[64];
-    int TagPosition;
-
-    void SetShowingTag(bool enabled)
-    {
-        this.IsTagDisplayed = enabled;
-    }
-
-    void SetTagId(char[] tag_id)
-    {
-        strcopy(this.TagId, 64, tag_id);
-    }
-
-    void SetTagName(char[] tag_name)
-    {
-        strcopy(this.TagName, 64, tag_name);
-    }
-
-    void SetTagDisplay(char[] tag_display)
-    {
-        strcopy(this.TagDisplay, 64, tag_display);
-    }
-
-    void SetTagColor(char[] tag_color)
-    {
-        strcopy(this.TagColor, 64, tag_color);
-    }
-
-    void SetTagPos(int pos)
-    {
-        this.TagPosition = pos;
-    } 
-
-    bool GetShowingTag()
-    {
-        return this.IsTagDisplayed;
-    }
-
-    void GetTagId(char[] buffer, int maxlen)
-    {
-        strcopy(buffer, maxlen, this.TagId);
-    }
-
-    void GetTagName(char[] buffer, int maxlen)
-    {
-        strcopy(buffer, maxlen, this.TagName);
-    }
-
-    void GetTagDisplay(char[] buffer, int maxlen)
-    {
-        strcopy(buffer, maxlen, this.TagDisplay);
-    }
-
-    void GetTagColor(char[] buffer, int maxlen)
-    {
-        strcopy(buffer, maxlen, this.TagColor);
-    }
-
-    int GetTagPos()
-    {
-        return this.TagPosition;
-    }
-}
+#include <sntdb/core>
 
 public Plugin myinfo =
 {
@@ -88,6 +18,8 @@ public Plugin myinfo =
     version = "1.0.0",
     url = "https://github.com/ArcalaAlien/snt_db"
 };
+
+bool lateLoad;
 
 Database DB_sntdb;
 char DBConfName[64];
@@ -109,16 +41,18 @@ TagSettings PlayerTags[MAXPLAYERS + 1];
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
 {
 
-    CreateNative("OpenTagMenu", BuildTagsPage1_Native);
-    CreateNative("OpenTagEquip", SendTagEquip_Native);
+    CreateNative("SNT_OpenTagMenu", BuildTagsPage1_Native);
+    CreateNative("SNT_OpenTagEquip", SendTagEquip_Native);
+    CreateNative("SNT_GetPlayerTagBool", SendDisplayingTag_Native);
     RegPluginLibrary("sntdb_tags");
 
+    lateLoad = late;
     return APLRes_Success;
 }
 
 public void OnPluginStart()
 {
-    LoadSQLStoreConfigs(DBConfName, 64, Prefix, 96, StoreSchema, 64, "Tags", CurrencyName, 64, CurrencyColor, 64, credits_given, over_mins);
+    SNT_LoadSQLStoreConfigs(DBConfName, 64, Prefix, 96, StoreSchema, 64, "Tags", CurrencyName, 64, CurrencyColor, 64, credits_given, over_mins);
 
     PrintToServer("[SNT] Connecting to Database");
     char error[255];
@@ -136,11 +70,24 @@ public void OnPluginStart()
 
     RegConsoleCmd("sm_tag", USR_OpenTagMenu, "/tag: Use this to open the tag menu!");
     RegConsoleCmd("sm_tags", USR_OpenTagMenu, "/tags: Use this to open the tag menu!");
+    RegConsoleCmd("sm_title", USR_OpenTagMenu, "/title: Use this to open the tag/title menu!");
+    RegConsoleCmd("sm_titles", USR_OpenTagMenu, "/titles: Use this to open the tag/title menu!");
+
+    if (lateLoad)
+        for (int i = 1; i < MaxClients; i++)
+            if (SNT_IsValidClient(i))
+                OnClientPutInServer(i);
 }
 
 public void OnClientPutInServer(int client)
 {
     GetCookies(client);
+}
+
+public void OnClientDisconnect(int client)
+{
+    if (SNT_IsValidClient(client))
+        PlayerTags[client].Reset();
 }
 
 void GetCookies(int client)
@@ -260,7 +207,7 @@ void BuildSettingsPanel(int client)
     SettingsPanel.Send(client, SettingsPanel_Handler, 0);
 }
 
-void BuildTagsPage1_Native(Handle plugin, int params)
+public void BuildTagsPage1_Native(Handle plugin, int params)
 {
     int client = GetNativeCell(1);
     char CTagName[64];
@@ -278,7 +225,7 @@ void BuildTagsPage1_Native(Handle plugin, int params)
     TagsPage1.Send(GetNativeCell(1), TagsPage1_Handler, 0);
 }
 
-void SendTagEquip_Native(Handle plugin, int params)
+public void SendTagEquip_Native(Handle plugin, int params)
 {
     char SteamId[64];
     GetClientAuthId(GetNativeCell(1), AuthId_Steam3, SteamId, 64);
@@ -286,6 +233,13 @@ void SendTagEquip_Native(Handle plugin, int params)
     char sQuery[256];
     Format(sQuery, 256, "SELECT ItemId, TagName, DisplayName, DisplayColor FROM %sInventories WHERE SteamId=\'%s\' ORDER BY TagName ASC", StoreSchema, SteamId);
     SQL_TQuery(DB_sntdb, SQL_FillTagList, sQuery, GetNativeCell(1));
+}
+
+public any SendDisplayingTag_Native(Handle plugin, int params)
+{
+    int client = GetNativeCell(1)
+
+    return PlayerTags[client].GetShowingTag();
 }
 
 public int SettingsPanel_Handler(Menu menu, MenuAction action, int param1, int param2)
@@ -391,9 +345,9 @@ public int TagsPage1_Handler(Menu menu, MenuAction action, int param1, int param
                 case 2:
                     BuildSettingsPanel(param1);
                 case 3:
-                    OpenInventoryMenu(param1);
+                    SNT_OpenInventoryMenu(param1);
                 case 4:
-                    OpenStoreMenu(param1);
+                    SNT_OpenStoreMenu(param1);
             }
         }
         case MenuAction_End:

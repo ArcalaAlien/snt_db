@@ -1,32 +1,19 @@
 #include <sourcemod>
 #include <sdktools>
 #include <tf2>
+#include <tf2_stocks>
 #include <dbi>
 #include <clientprefs>
 #include <files>
 #include <keyvalues>
 
 #include <morecolors>
-#include <sntdb_store>
+#include <stocksoup/entity_tools>
+#include <sntdb/store>
+#include <sntdb/trails>
 
 #define REQUIRE_PLUGIN 
-#include <sntdb_core>
-
-// 12 Modes
-#define RED {255, 0, 0}
-#define ORANGE {255, 180, 0}
-#define YELLOW {255, 255, 0}
-#define YELLOWGREEN {180, 255, 0}
-#define GREEN {0, 255, 0}
-#define GREENBLUE {0, 255, 180}
-#define CYAN {0, 255, 255}
-#define BLUEGREEN {0, 180, 255}
-#define BLUE {0, 0, 255}
-#define PURPLE {180, 0, 255}
-#define PINK {255, 0, 255}
-#define MAGENTA {255, 0, 180}
-#define WHITE {255, 255, 255}
-#define GREY {180, 180, 180}
+#include <sntdb/core>
 
 public Plugin myinfo =
 {
@@ -37,202 +24,7 @@ public Plugin myinfo =
     url = "https://github.com/ArcalaAlien/snt_db"
 };
 
-enum struct TrailInfo
-{
-    int TrailIndex;
-    char TrailId[64];
-    char TrailName[64];
-    char TrailVMT[256];
-
-    void SetId(char[] new_id)
-    {
-        strcopy(this.TrailId, 64, new_id);
-    }
-
-    void SetName(char[] new_name)
-    {
-        strcopy(this.TrailName, 64, new_name);
-    }
-
-    void SetVMT(char[] vmt)
-    {
-        strcopy(this.TrailVMT, 256, vmt);
-    }
-
-    void GetId(char[] buffer, int maxlen)
-    {
-        strcopy(buffer, maxlen, this.TrailId);
-    }
-
-    void GetName(char[] buffer, int maxlen)
-    {
-        strcopy(buffer, maxlen, this.TrailName);
-    }
-
-    void GetVMT(char[] buffer, int maxlen)
-    {
-        strcopy(buffer, maxlen, this.TrailVMT);
-    }
-}
-
-enum struct PlayerTrail
-{
-    bool Showing;
-    int EntityIndex;
-    char TrailId[64];
-    char TrailName[64];
-    char TrailVMT[256];
-    int TrailIndex;
-    int Color[4];
-    int Frame;
-    float LastPos[3];
-    float Width;
-
-    void SetId(char[] trail_id)
-    {
-        strcopy(this.TrailId, 64, trail_id);
-    }
-
-    void SetName(char[] trail_name)
-    {
-        strcopy(this.TrailName, 64, trail_name);
-    }
-
-    void SetVMT(char[] vmt)
-    {
-        strcopy(this.TrailVMT, 256, vmt);
-    }
-
-    void SetRGB(int new_color[3])
-    {
-        this.Color[0] = new_color[0];
-        this.Color[1] = new_color[1];
-        this.Color[2] = new_color[2];
-    }
-
-    void SetRGBA(int new_color[4])
-    {
-        this.Color[0] = new_color[0];
-        this.Color[1] = new_color[1];
-        this.Color[2] = new_color[2];
-        this.Color[3] = new_color[3];
-    }
-
-    void StrToColor4(char[] clr_str)
-    {
-        char RGBA[4][4];
-        ExplodeString(clr_str, ",", RGBA, 4, 4);
-
-        int R = StringToInt(RGBA[0]);
-        int G = StringToInt(RGBA[1]);
-        int B = StringToInt(RGBA[2]);
-        int A = StringToInt(RGBA[3]);
-
-        if (R > 255)
-            R = 255;
-        else if (G > 255)
-            G = 255;
-        else if (B > 255)
-            B = 255;
-        else if (A > 255)
-            A = 255;
-        else if (R < 0)
-            R = 0;
-        else if (G < 0)
-            G = 0;
-        else if (B < 0)
-            B = 0;
-        else if (A < 0)
-            A = 0;
-
-        this.Color[0] = R;
-        this.Color[1] = G;
-        this.Color[2] = B;
-        this.Color[3] = A;
-    }
-
-    void SetAlpha(int alpha=130)
-    {
-        this.Color[3] = alpha;
-    }
-
-    void SetLastPos(float pos[3])
-    {
-        this.LastPos[0] = pos[0];
-        this.LastPos[1] = pos[1];
-        this.LastPos[2] = pos[2];
-    }
-
-    void GetId(char[] buffer, int maxlen=64)
-    {
-        strcopy(buffer, maxlen, this.TrailId);
-    }
-
-    void GetName(char[] buffer, int maxlen=64)
-    {
-        strcopy(buffer, maxlen, this.TrailName);
-    }
-
-    void GetVMT(char[] buffer, int maxlen=256)
-    {
-        strcopy(buffer, maxlen, this.TrailVMT);
-    }
-
-
-    void GetRGB(int color_buffer[3])
-    {
-        color_buffer[0] = this.Color[0];
-        color_buffer[1] = this.Color[1];
-        color_buffer[2] = this.Color[2];
-    }
-
-    void GetRGBA(int color_buffer[4])
-    {
-        color_buffer[0] = this.Color[0];
-        color_buffer[1] = this.Color[1];
-        color_buffer[2] = this.Color[2];
-        color_buffer[3] = this.Color[3];
-    }
-
-    int GetAlpha()
-    {
-        return this.Color[3];
-    }
-
-    void ColorToStr(char[] buffer, int maxlen=24)
-    {
-        Format(buffer, maxlen, "%i,%i,%i,%i", this.Color[0], this.Color[1], this.Color[2], this.Color[3]);
-    }
-
-    void GetLastPos(float pos[3])
-    {
-        pos[0] = this.LastPos[0];
-        pos[1] = this.LastPos[1];
-        pos[2] = this.LastPos[2];
-    }
-
-    void Reset()
-    {
-        this.Showing = false;
-        this.EntityIndex = -1;
-        strcopy(this.TrailId, 64, "NONE");
-        strcopy(this.TrailName, 64, "NONE");
-        strcopy(this.TrailVMT, 256, "");
-        this.TrailIndex = -1;
-        this.Color = {255, 255, 255, 255};
-        this.LastPos = {0.0, 0.0, 0.0};
-        this.Width = 8.0;
-    }
-}
-
-public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
-{
-    CreateNative("OpenTrailMenu", SendPage1_Native);
-    CreateNative("OpenTrailEquip", SendEquipMenu_Native);
-    RegPluginLibrary("sntdb_trails");
-
-    return APLRes_Success;
-}
+bool lateLoad;
 
 Database DB_sntdb;
 char DBConfName[64];
@@ -251,11 +43,21 @@ Cookie ck_TrailColor;
 Cookie ck_TrailWidth;
 
 PlayerTrail EqpdTrail[MAXPLAYERS + 1];
-TrailInfo Trails[32];
+TrailInfo Trails[64];
+
+public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
+{
+    CreateNative("SNT_OpenTrailMenu", SendPage1_Native);
+    CreateNative("SNT_OpenTrailEquip", SendEquipMenu_Native);
+    RegPluginLibrary("sntdb_trails");
+
+    lateLoad = late;
+    return APLRes_Success;
+}
 
 public void OnPluginStart()
 {
-    LoadSQLStoreConfigs(DBConfName, 64, Prefix, 96, StoreSchema, 64, "Trails", CurrencyName, 64, CurrencyColor, 64, credits_given, over_mins);
+    SNT_LoadSQLStoreConfigs(DBConfName, 64, Prefix, 96, StoreSchema, 64, "Trails", CurrencyName, 64, CurrencyColor, 64, credits_given, over_mins);
 
     PrintToServer("[SNT] Connecting to Database");
     char error[255];
@@ -275,8 +77,29 @@ public void OnPluginStart()
     ck_TrailColor = RegClientCookie("trail_color", "r,g,b,a RGBA values separated by columns, used to color a trail.", CookieAccess_Protected);
     ck_TrailWidth = RegClientCookie("trail_width", "The width in hammer units of a player's trail.", CookieAccess_Protected);
 
+    RegAdminCmd("sm_refreshtrail", ADM_RefreshTrails, ADMFLAG_KICK, "Refresh all of the current trails in the server.");
     RegConsoleCmd("sm_trails", USR_OpenTrailMenu, "Use this to open the trail menu!");
     RegConsoleCmd("sm_trail", USR_OpenTrailMenu, "Use this to open the trail menu!");
+
+    if (lateLoad)
+    {
+        OnMapStart();
+        for (int i = 1; i < MaxClients; i++)
+            if (SNT_IsValidClient(i))
+            {
+                OnClientPutInServer(i);
+                if (IsPlayerAlive(i))
+                    if (EqpdTrail[i].Showing)
+                        if (EqpdTrail[i].EntityIndex != -1)
+                            UpdateTrail(i);
+                        else
+                        {
+                            CreateTrail(i);
+                            CreateTimer(0.1, Timer_ShowSprite, i);
+                        }
+            }
+    }
+
 }
 
 public void OnMapStart()
@@ -294,21 +117,32 @@ public void OnClientPutInServer(int client)
 
 public void OnClientDisconnect(int client)
 {
-    if (EqpdTrail[client].EntityIndex != -1)
-        KillTrail(client);
-    EqpdTrail[client].Reset();
+    if (SNT_IsValidClient(client))
+    {
+        if (EqpdTrail[client].EntityIndex != -1 && IsValidEdict(EqpdTrail[client].EntityIndex))
+            KillTrail(client);
+        EqpdTrail[client].Reset();
+    }
 }
 
 public void OnPlayerSpawn(Event event, const char[] name, bool dontBroadcast)
 {
-    // if user is showing their trail, enable it again.
     int uid = GetEventInt(event, "userid");
     int client = GetClientOfUserId(uid);
-    if (EqpdTrail[client].EntityIndex != -1)
-        UpdateTrail(client);
-    else
-        CreateTrail(client);
-    CreateTimer(0.1, Timer_ShowSprite, client);
+    if (IsPlayerAlive(client))
+    {
+        if (EqpdTrail[client].Showing)
+        {
+            if (EqpdTrail[client].EntityIndex != -1)
+                UpdateTrail(client);
+            else
+            {
+                CreateTrail(client);
+                CreateTimer(0.1, Timer_ShowSprite, client);
+            }
+        }
+    }
+
 }
 
 public void OnPlayerDeath(Event event, const char[] name, bool dontBroadcast)
@@ -316,77 +150,84 @@ public void OnPlayerDeath(Event event, const char[] name, bool dontBroadcast)
     // Disable trail when player dies
     int uid = GetEventInt(event, "userid");
     int client = GetClientOfUserId(uid);
-    KillTrail(client);
+    if (EqpdTrail[client].TrailIndex != -1)
+        KillTrail(client);
 }
 
 public void TF2_OnConditionAdded(int client, TFCond condition)
 {
-    if (condition == TFCond_Cloaked)
-    {
+    if (condition == TFCond_Cloaked && EqpdTrail[client].TrailIndex != -1)
         KillTrail(client);
-    }
 }
 
 public void TF2_OnConditionRemoved(int client, TFCond condition)
 {
-    if (condition == TFCond_Cloaked)
-    {
+    if (condition == TFCond_Cloaked && EqpdTrail[client].TrailIndex == -1)
         CreateTrail(client);
-    }
 }
 
 void CreateTrail(int client)
 {
-    float PlayerOrigin[3];
-    GetClientAbsOrigin(client, PlayerOrigin);
-
-    PlayerOrigin[2] = PlayerOrigin[2] + 8.0;
-
-    char TrailVMT[256];
-    EqpdTrail[client].GetVMT(TrailVMT, 256);
-
-    int RGB[3];
-    EqpdTrail[client].GetRGB(RGB)
-
-    char RGBStr[16];
-    Format(RGBStr, 16, "%i %i %i", RGB[0], RGB[1], RGB[2]);
-
-    int Alpha = EqpdTrail[client].GetAlpha();
-
-    int ent_trail = CreateEntityByName("env_spritetrail");
-    if (!IsValidEdict(ent_trail))
+    if (SNT_IsValidClient(client) && IsPlayerAlive(client))
     {
-        EqpdTrail[client].EntityIndex = -1;
-        PrintToServer("CreateTrail: Unable to create valid edict. %i", ent_trail);
-        return;
+        float PlayerOrigin[3];
+        GetClientAbsOrigin(client, PlayerOrigin);
+
+        PlayerOrigin[2] = PlayerOrigin[2] + 8.0;
+
+        char TrailVMT[256];
+        EqpdTrail[client].GetVMT(TrailVMT, 256);
+
+        int RGB[3];
+        EqpdTrail[client].GetRGB(RGB)
+
+        char RGBStr[16];
+        Format(RGBStr, 16, "%i %i %i", RGB[0], RGB[1], RGB[2]);
+
+        int Alpha = EqpdTrail[client].GetAlpha();
+
+        int ent_trail = CreateEntityByName("env_spritetrail");
+        if (!IsValidEdict(ent_trail))
+        {
+            EqpdTrail[client].EntityIndex = -1;
+            PrintToServer("CreateTrail: Unable to create valid edict. %i", ent_trail);
+            return;
+        }
+        else
+        {
+            DispatchKeyValueFloat(ent_trail, "lifetime", 2.0);
+            DispatchKeyValueFloat(ent_trail, "startwidth", EqpdTrail[client].Width);
+            DispatchKeyValueFloat(ent_trail, "endwidth", 0.0);
+            DispatchKeyValue(ent_trail, "spritename",TrailVMT);
+            DispatchKeyValue(ent_trail, "rendercolor", RGBStr);
+            DispatchKeyValue(ent_trail, "framerate", "30");
+            DispatchKeyValue(ent_trail, "animate", "true");
+            DispatchKeyValueInt(ent_trail, "renderamt", Alpha);
+            DispatchKeyValueInt(ent_trail, "rendermode", 5);
+            DispatchKeyValue(ent_trail, "disablereceiveshadows", "true");
+
+            char trail_name[32];
+            Format(trail_name, 32, "snt_trail_%i", client);
+            DispatchKeyValue(ent_trail, "targetname", trail_name);
+
+            if (!DispatchSpawn(ent_trail))
+            {
+                PrintToServer("[SNT] Unable to spawn trail for some reason!");
+            }
+            else
+            {
+                EqpdTrail[client].EntityIndex = ent_trail;
+
+                TeleportEntity(ent_trail, PlayerOrigin, NULL_VECTOR);
+
+                SetVariantString("!activator");
+                if (ent_trail != -1)
+                    AcceptEntityInput(ent_trail, "SetParent", client);
+
+                SetEntPropFloat(ent_trail, Prop_Send, "m_flTextureRes", 0.05);
+            }
+        }
     }
-    EqpdTrail[client].EntityIndex = ent_trail;
-
-    DispatchKeyValueFloat(ent_trail, "lifetime", 1.5);
-    DispatchKeyValueFloat(ent_trail, "startwidth", EqpdTrail[client].Width);
-    DispatchKeyValueFloat(ent_trail, "endwidth", EqpdTrail[client].Width);
-    DispatchKeyValue(ent_trail, "spritename",TrailVMT);
-    DispatchKeyValue(ent_trail, "rendercolor", RGBStr);
-    DispatchKeyValue(ent_trail, "framerate", "30");
-    DispatchKeyValue(ent_trail, "animate", "true");
-    DispatchKeyValueInt(ent_trail, "renderamt", Alpha);
-    DispatchKeyValueInt(ent_trail, "rendermode", 5);
-
-    char trail_name[16];
-    Format(trail_name, 16, "trail_%i", client);
-    DispatchKeyValue(ent_trail, "targetname", trail_name);
-
-    if (!DispatchSpawn(ent_trail))
-    {
-        PrintToServer("[SNT] Unable to spawn trail for some reason!");
-    }
-
-    TeleportEntity(ent_trail, PlayerOrigin, NULL_VECTOR);
-
-    SetVariantString("!activator");
-    AcceptEntityInput(ent_trail, "SetParent", client);
-
-    SetEntPropFloat(ent_trail, Prop_Send, "m_flTextureRes", 0.05);
 }
 
 void UpdateTrail(int client)
@@ -406,7 +247,10 @@ public Action Timer_CreateTrail(Handle timer, any client)
 
 public Action Timer_ShowSprite(Handle timer, any client)
 {
-    AcceptEntityInput(EqpdTrail[client].EntityIndex, "ShowSprite");
+    if (EqpdTrail[client].EntityIndex != -1)
+        if (IsValidEdict(EqpdTrail[client].EntityIndex))
+            AcceptEntityInput(EqpdTrail[client].EntityIndex, "ShowSprite");
+
     return Plugin_Continue;
 }
 
@@ -414,8 +258,23 @@ void KillTrail(int client)
 {
     if (EqpdTrail[client].EntityIndex != -1)
     {
-        AcceptEntityInput(EqpdTrail[client].EntityIndex, "Kill");
-        EqpdTrail[client].EntityIndex = -1;
+        if (IsValidEdict(EqpdTrail[client].EntityIndex))
+        {
+            char classname[64];
+            GetEdictClassname(EqpdTrail[client].EntityIndex, classname, sizeof(classname));
+
+            if (StrEqual(classname, "env_spritetrail"))
+            {
+                if (AcceptEntityInput(EqpdTrail[client].EntityIndex, "Kill"))
+                {
+                    EqpdTrail[client].EntityIndex = -1;
+                }
+                else
+                    PrintToServer("KillTrail: Unable to kill trail");
+            }
+        }
+        else
+            PrintToServer("KillTrail: Not a valid trail index");
     }
 }
 
@@ -534,6 +393,10 @@ void SendPage1(int client)
     EqpdTrail[client].GetName(TrailName, 96);
     Format(TrailName, 96, "Equipped: %s", TrailName);
 
+    char targetname[32];
+    Format(targetname, sizeof(targetname), "snt_trail_%i", client);
+    EqpdTrail[client].TrailIndex = FindEntityByTargetName(-1, targetname, "env_spritetrail");
+
     Page1Panel.DrawItem("Equip a trail!");
     Page1Panel.DrawText(" ");
     Page1Panel.DrawItem("Trail Settings");
@@ -547,12 +410,18 @@ void SendPage1(int client)
 
 void SendPage1_Native(Handle plugin, int params)
 {
+    int client = GetNativeCell(1);
+
     Panel Page1Panel = CreatePanel();
     Page1Panel.SetTitle("Trail Menu");
 
     char TrailName[96];
     EqpdTrail[GetNativeCell(1)].GetName(TrailName, 96);
     Format(TrailName, 96, "Equipped: %s", TrailName);
+
+    char targetname[32];
+    Format(targetname, sizeof(targetname), "snt_trail_%i", client);
+    EqpdTrail[client].TrailIndex = FindEntityByTargetName(-1, targetname, "env_spritetrail");
 
     Page1Panel.DrawItem("Equip a trail!");
     Page1Panel.DrawText(" ");
@@ -562,7 +431,7 @@ void SendPage1_Native(Handle plugin, int params)
     Page1Panel.DrawItem("Yer Treasure");
     Page1Panel.DrawItem("The Tavern");
     Page1Panel.DrawItem("Exit");
-    Page1Panel.Send(GetNativeCell(1), MainPage1_Handler, 0);
+    Page1Panel.Send(client, MainPage1_Handler, 0);
 }
 
 void SendEquipMenu_Native(Handle plugin, int params)
@@ -607,6 +476,9 @@ void BuildTrailSettings(int client)
     Format(CurrWidth, 24, "Current Width: %i", RoundFloat(EqpdTrail[client].Width));
     TrailSettings.DrawText(CurrWidth);
     TrailSettings.DrawItem("Change your trail width!");
+    TrailSettings.DrawText(" ");
+    (EqpdTrail[client].Showing) ? TrailSettings.DrawText("Currently: Displaying Trail") : TrailSettings.DrawText("Currently: Hiding Trail");
+    TrailSettings.DrawItem("Toggle Trail");
     TrailSettings.DrawText(" ");
     TrailSettings.DrawItem("Main Menu");
     TrailSettings.DrawItem("Exit");
@@ -1069,12 +941,12 @@ public int MainPage1_Handler(Menu menu, MenuAction action, int param1, int param
                 case 4:
                 {
                     EmitSoundToClient(param1, "buttons/button14.wav");
-                    OpenInventoryMenu(param1);
+                    SNT_OpenInventoryMenu(param1);
                 }
                 case 5:
                 {
                     EmitSoundToClient(param1, "buttons/button14.wav");
-                    OpenStoreMenu(param1);
+                    SNT_OpenStoreMenu(param1);
                 }
                 case 6:
                 {
@@ -1108,9 +980,16 @@ public int TrailSettingsPage_Handler(Menu menu, MenuAction action, int param1, i
                 case 3:
                 {
                     EmitSoundToClient(param1, "buttons/button14.wav");
-                    SendPage1(param1);
+                    (EqpdTrail[param1].Showing) ? KillTrail(param1) : CreateTrail(param1);
+                    (EqpdTrail[param1].Showing) ? SetCookies(param1, 0, "false") : SetCookies(param1, 0, "true");
+                    BuildPluginSettings(param1);
                 }
                 case 4:
+                {
+                    EmitSoundToClient(param1, "buttons/button14.wav");
+                    SendPage1(param1);
+                }
+                case 5:
                 {
                     EmitSoundToClient(param1, "buttons/combine_button7.wav");
                     delete menu;
@@ -1136,7 +1015,8 @@ public int PluginSettingsPage_Handler(Menu menu, MenuAction action, int param1, 
                     BuildPluginSettings(param1);
 
                     (EqpdTrail[param1].Showing) ? SetCookies(param1, 0, "true") : SetCookies(param1, 0, "false");
-                    (EqpdTrail[param1].Showing) ? AcceptEntityInput(EqpdTrail[param1].EntityIndex, "ShowSprite") : AcceptEntityInput(EqpdTrail[param1].EntityIndex, "HideSprite");
+                    if (EqpdTrail[param1].EntityIndex != -1)
+                        (EqpdTrail[param1].Showing) ? AcceptEntityInput(EqpdTrail[param1].EntityIndex, "ShowSprite") : AcceptEntityInput(EqpdTrail[param1].EntityIndex, "HideSprite");
                 }
                 case 2:
                 {
@@ -1168,43 +1048,56 @@ public int EquipMenu_Handler(Menu menu, MenuAction action, int param1, int param
 
             if (StrEqual(Option, Previous))
             {
+                char clientName[128];
+                GetClientName(param1, clientName, 128);
+
                 char TrailName[64];
                 EqpdTrail[param1].GetName(TrailName, 64);
-                
                 EqpdTrail[param1].SetId("NONE");
                 EqpdTrail[param1].SetName("NONE");
-                EqpdTrail[param1].TrailIndex = -1;
-                EqpdTrail[param1].Frame = 0;
 
-                AcceptEntityInput(EqpdTrail[param1].EntityIndex, "HideSprite");
-
-                CPrintToChat(param1, "%s Sucessfully unequipped {greenyellow}%s {default}from your trail slot!", Prefix, TrailName);
-                return 0;
-            }
-
-            for (int i = 0; i <= sizeof(Trails); i++)
-            {
-                char TrailId[64];
-                char TrailName[64];
-                char TrailVMT[256];
-                Trails[i].GetId(TrailId, 64);
-                Trails[i].GetName(TrailName, 64);
-                Trails[i].GetVMT(TrailVMT, 256);
-
-                if (StrEqual(Option, TrailId))
+                if (EqpdTrail[param1].EntityIndex != -1)
                 {
-                    EqpdTrail[param1].SetId(TrailId);
-                    EqpdTrail[param1].SetName(TrailName);
-                    EqpdTrail[param1].SetVMT(TrailVMT);
-                    EqpdTrail[param1].TrailIndex = Trails[i].TrailIndex;
-                    CPrintToChat(param1, "%s Sucessfully equipped {greenyellow}%s {default}as your trail!", Prefix, TrailName);
-                    
-                    SetCookies(param1, 2, TrailId);
-                    SetCookies(param1, 3, TrailName);
-                    SetCookies(param1, 4, TrailVMT);
-                    UpdateTrail(param1);
+                    KillTrail(param1);
+                    EqpdTrail[param1].Showing = false;
+                    CPrintToChat(param1, "%s Sucessfully unequipped {greenyellow}%s {default}from your trail slot!", Prefix, TrailName);
                 }
             }
+            else
+            {
+                for (int i = 0; i < sizeof(Trails); i++)
+                {
+                    char TrailId[64];
+                    char TrailName[64];
+                    char TrailVMT[256];
+                    Trails[i].GetId(TrailId, 64);
+                    Trails[i].GetName(TrailName, 64);
+                    Trails[i].GetVMT(TrailVMT, 256);
+
+                    if (StrEqual(Option, TrailId))
+                    {
+                        EqpdTrail[param1].SetId(TrailId);
+                        EqpdTrail[param1].SetName(TrailName);
+                        EqpdTrail[param1].SetVMT(TrailVMT);
+                        CPrintToChat(param1, "%s Sucessfully equipped {greenyellow}%s {default}as your trail!", Prefix, TrailName);
+                        
+                        SetCookies(param1, 2, TrailId);
+                        SetCookies(param1, 3, TrailName);
+                        SetCookies(param1, 4, TrailVMT);
+                        EqpdTrail[param1].Showing = true;
+
+                        if (EqpdTrail[param1].EntityIndex != -1)
+                            UpdateTrail(param1);
+                        else
+                            CreateTrail(param1);
+                    }
+                }
+            }
+        }
+
+        case MenuAction_End:
+        {
+            delete menu;
         }
     }
     return 0;
@@ -1291,6 +1184,13 @@ public Action USR_OpenTrailMenu(int client, int args)
         return Plugin_Handled;
     }
 
+    if (!IsPlayerAlive(client) || TF2_GetClientTeam(client) == TFTeam_Spectator)
+    {
+        EmitSoundToClient(client, "snt_sounds/ypp_sting.mp3");
+        CPrintToChat(client, "%s {fullred}Dead men equip no trails!", Prefix);
+        return Plugin_Handled;
+    }
+
     if (args < 1)
     {
         SendPage1(client);
@@ -1307,6 +1207,7 @@ public Action USR_OpenTrailMenu(int client, int args)
 
             EqpdTrail[client].StrToColor4(Arg2);
             UpdateTrail(client);
+            SetClientCookie(client, ck_TrailColor, Arg2);
         }
         else
         {
@@ -1314,5 +1215,28 @@ public Action USR_OpenTrailMenu(int client, int args)
             CReplyToCommand(client, "{fullred} If ye want to change yer trail's color, do '/trail color r,g,b,a' or use '/trail' to visit the trail menu!");
         }
     }
+    return Plugin_Handled;
+}
+
+public Action ADM_RefreshTrails(int client, int args)
+{
+    if (args > 0)
+        return Plugin_Handled;
+    
+    for (int i = 1; i < MaxClients; i++)
+    {
+
+        char entName[32];
+        Format(entName, sizeof(entName), "snt_trail_%i", i);
+
+        int trailEnt = FindEntityByTargetName(-1, "snt_trail_%i", "env_spritetrail");
+
+        if (trailEnt != - 1)
+            AcceptEntityInput(trailEnt, "Kill");
+
+        if (EqpdTrail[i].Showing)
+            CreateTrail(i);
+    }
+
     return Plugin_Handled;
 }

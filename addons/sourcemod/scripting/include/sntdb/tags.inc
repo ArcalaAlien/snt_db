@@ -82,6 +82,16 @@ enum struct TagSettings
     {
         return this.TagPosition;
     }
+
+    void Reset()
+    {
+        this.IsTagDisplayed = false;
+        Format(this.TagColor, sizeof(this.TagColor), "NONE");
+        Format(this.TagDisplay, sizeof(this.TagDisplay), "NONE");
+        Format(this.TagId, sizeof(this.TagId), "NONE");
+        Format(this.TagName, sizeof(this.TagName), "NONE");
+        this.TagPosition = 0;
+    }
 }
 
 /**
@@ -90,7 +100,7 @@ enum struct TagSettings
  *
  * @param client    Client index
  */
-native void OpenTagMenu(int client);
+native void SNT_OpenTagMenu(int client);
 
 
 /**
@@ -98,4 +108,13 @@ native void OpenTagMenu(int client);
  * 
  * @param client    Client index
  */
-native void OpenTagEquip(int client);
+native void SNT_OpenTagEquip(int client);
+
+/**
+ * Sends if the player is displaying a tag
+ * 
+ * @param client    Client index
+ * 
+ * @return true - Player is displaying, false - Player is not displaying.
+ */
+native bool SNT_GetPlayerTagBool(int client);

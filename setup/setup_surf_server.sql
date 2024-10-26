@@ -11,7 +11,7 @@ DROP TABLE IF EXISTS surf0players;
 
 CREATE TABLE surf0players (
     SteamId     varchar(64),
-    PlayerName  varchar(256)    CHARACTER SET UTF8MB4 NOT NULL,
+    PlayerName  varchar(256)    NOT NULL,
     Points      decimal         DEFAULT 0,
     VotePerms   decimal         DEFAULT 1,
     PRIMARY KEY (SteamId)
@@ -52,10 +52,20 @@ CREATE TABLE surf0votes (
 CREATE TABLE surf0logs (
     DateSent    varchar(64),
     ChatterAuth varchar(64) NOT NULL,
-    ChatterName varchar(256) CHARACTER SET UTF8MB4 NOT NULL,
-    ChatMessage varchar(512) CHARACTER SET UTF8MB4 NOT NULL,
+    ChatterName varchar(256) NOT NULL,
+    ChatMessage varchar(512) NOT NULL,
     PRIMARY KEY (DateSent, ChatterAuth),
     FOREIGN KEY (ChatterAuth) REFERENCES surf0players(SteamId)
+);
+
+CREATE TABLE surf0times (
+    SteamId     varchar(64) NOT NULL,
+    MapName     varchar(64) NOT NULL,
+    StageName   varchar(64) NOT NULL,
+    PlayerTime  time        NOT NULL,
+    PRIMARY KEY (SteamId),
+    FOREIGN KEY (SteamId) REFERENCES surf0players(SteamId),
+    FOREIGN KEY (MapName) REFERENCES surf0maps(MapName)
 );
 
 -- VIEWS --
